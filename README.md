@@ -1,0 +1,1 @@
+The checkout function intentionally returns 503 until an official payment provider endpoint and secret are configured. Do not replace this with a client-controlled payment URL. For CCP/eCCP, use the official merchant/API integration offered by the provider; a CCP account number alone is not an API.

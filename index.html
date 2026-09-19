@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f8fafc" />
+  <meta name="description" content="منصة آمنة للتحقق من تراخيص المستندات والطباعة الرقمية" />
+  <title>مِداد | ترخيص الطباعة الآمنة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=13" />
+</head>
+<body>
+  <div class="privacy-shield" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="مِداد - الرئيسية">
+      <span class="brand-mark"><i data-lucide="scan-line"></i></span>
+      <span><strong>مِداد</strong><small>ترخيص. تحقق. اطبع.</small></span>
+    </a>
+    <nav class="nav-links" aria-label="التنقل الرئيسي">
+      <a class="active" href="#workspace">مساحة العمل</a>
+      <a href="#how-it-works">كيف تعمل؟</a>
+      <a href="#security">الأمان</a>
+    </nav>
+    <div class="header-status"><span class="pulse-dot"></span> النظام يعمل بكفاءة</div>
+  </header>
+
+  <main id="top">
+    <section class="catalog-section" id="workspace" aria-labelledby="catalog-title">
+      <div class="catalog-intro"><div><div class="eyebrow"><span class="eyebrow-line"></span> مكتبة الوثائق</div><h1 id="catalog-title">اختر وثيقتك،<br /><em>واطبع بثقة.</em></h1></div><p>اشترِ عدد النسخ الذي تحتاجه، ثم يصلك مفتاح آمن لفتح وثيقتك ومعاينتها ثلاثية الأبعاد.</p></div>
+      <div class="catalog-actions"><span>يمكنك شراء وثيقة جاهزة. رفع الملفات متاح للمسؤول فقط.</span><button class="admin-upload-button" id="admin-upload-button" type="button"><i data-lucide="shield-lock"></i> دخول المسؤول</button><button class="upload-document-button is-hidden" id="upload-document-button" type="button"><i data-lucide="upload"></i> إضافة ملف</button><input id="document-upload" type="file" accept=".txt,.md,.html,.htm,.pdf,image/*" hidden /></div>
+      <div class="document-catalog">
+        <article class="catalog-card" data-document="certificate"><div class="catalog-preview mint-preview"><i data-lucide="award"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">شهادة مهنية</span><h2>شهادة المشاركة المهنية</h2><p>وثيقة رسمية قابلة للتحقق مع حماية ضد المسح والنسخ.</p><div class="catalog-footer"><strong>120 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="certificate" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
+        <article class="catalog-card" data-document="attendance"><div class="catalog-preview blue-preview"><i data-lucide="calendar-check-2"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">سجل حضور</span><h2>وثيقة إثبات الحضور</h2><p>سجل موثق للفعاليات والدورات مع عدد نسخ قابل للتخصيص.</p><div class="catalog-footer"><strong>80 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="attendance" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
+        <article class="catalog-card" data-document="license"><div class="catalog-preview yellow-preview"><i data-lucide="file-badge-2"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">ترخيص استخدام</span><h2>ترخيص المحتوى الرقمي</h2><p>ترخيص واضح للاستخدام والطباعة، مرتبط بمفتاح فردي.</p><div class="catalog-footer"><strong>200 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="license" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
+      </div>
+    </section>
+
+    <section class="activation-section" id="activation-section" aria-labelledby="activation-title">
+      <div class="section-kicker">01 <span></span> نقطة البداية</div>
+      <div class="activation-heading">
+        <div><h2 id="activation-title">فعّل مفتاح الترخيص</h2><p>أدخل المفتاح الموجود في إيصال الدفع لفتح المستند المخصص لك.</p></div>
+        <div class="secure-chip"><i data-lucide="lock-keyhole"></i> اتصال مشفّر</div>
+      </div>
+      <form class="activation-bar" id="activation-form">
+        <div class="key-input-wrap"><i data-lucide="key-round"></i><input id="license-key" autocomplete="off" placeholder="KEY-XXXXXX" aria-label="مفتاح الترخيص" maxlength="16" /><span class="input-hint">مثال: KEY-7A92QX</span></div>
+        <button class="primary-button" type="submit"><span>تفعيل المستند</span><i data-lucide="arrow-left"></i></button>
+      </form>
+      <div class="privacy-consent"><input id="privacy-consent" type="checkbox" /><span>أوافق على <button type="button" id="privacy-policy-link">سياسة الخصوصية</button> وأفهم أن كل طبعة مرتبطة بمفتاح الترخيص.</span></div>
+      <div class="notice" id="notice" role="status" aria-live="polite"><i data-lucide="info"></i><span>أدخل مفتاح الترخيص لبدء جلسة آمنة.</span></div>
+    </section>
+
+    <section class="document-section" id="security" aria-labelledby="document-title">
+      <div class="section-kicker">02 <span></span> المستند المحمي</div>
+      <div class="document-layout">
+        <div class="document-viewer">
+          <div class="viewer-topline"><span class="live-label"><span class="live-dot"></span> معاينة حية</span><span class="viewer-id">DOC-<span id="doc-id">••••••</span></span></div>
+          <div class="scene-wrap document-scene" aria-label="معاينة ثلاثية الأبعاد للمستند الآمن"><div class="scene-halo"></div><div id="three-scene"></div><div class="scene-lock" id="scene-lock"><i data-lucide="file-lock-2"></i><strong>المستند ثلاثي الأبعاد مقفل</strong><span>فعّل الترخيص لعرض الوثيقة</span></div></div>
+          <div class="document-paper" id="document-paper">
+            <div class="paper-watermark">مِداد</div>
+            <div class="moire-pattern"></div>
+            <div class="paper-content">
+              <div class="paper-meta"><span id="doc-category">مستند موثّق</span><span id="doc-date">18 سبتمبر 2026</span></div>
+              <div class="paper-seal"><i data-lucide="shield-check"></i><span>VERIFIED</span></div>
+              <h2 id="document-title">بانتظار التفعيل</h2>
+              <div class="paper-rule"></div>
+              <div id="document-content" class="document-body"><p>سيظهر محتوى المستند هنا بعد التحقق من مفتاح الترخيص. كل عنصر في هذه المعاينة يحمل طبقة حماية مرئية وغير مرئية.</p><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+              <div class="paper-footer"><span>مِداد / نسخة مرخّصة</span><span class="secure-foot"><i data-lucide="fingerprint"></i> محمي</span></div>
+            </div>
+          </div>
+        </div>
+        <aside class="license-panel">
+          <div class="panel-header"><span>حالة الترخيص</span><span class="verified-state" id="license-state"><span class="state-dot"></span> غير مفعل</span></div>
+          <div class="counter-ring" id="counter-ring"><div><strong id="prints-remaining">—</strong><span>نسخة متبقية</span></div></div>
+          <div class="counter-copy"><strong><span id="prints-used">0</span> من <span id="total-prints">—</span> طبعات</strong><span>يتم التحديث بعد كل عملية</span></div>
+          <div class="progress-track"><span id="progress-bar"></span></div>
+          <button class="print-button" id="print-button" type="button" disabled><i data-lucide="printer"></i><span>طباعة المستند</span><kbd>CTRL P</kbd></button>
+          <p class="panel-note"><i data-lucide="info"></i> كل طبعة مرتبطة بمفتاح الترخيص ولا يمكن استرجاعها.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="workflow-section" id="how-it-works" aria-labelledby="workflow-title">
+      <div class="workflow-heading"><div><div class="section-kicker">03 <span></span> رحلة آمنة</div><h2 id="workflow-title">من الدفع إلى الورق، <em>بوضوح.</em></h2></div><p>صممنا كل خطوة لتكون مفهومة، قابلة للتتبع، وآمنة.</p></div>
+      <div class="workflow-grid">
+        <article class="workflow-card"><div class="step-number">01</div><div class="step-icon mint"><i data-lucide="wallet-cards"></i></div><h3>الدفع الموثوق</h3><p>أكمل الدفع عبر بوابة آمنة، وسيتم إنشاء ترخيصك تلقائيًا.</p><span class="step-link">بوابة مشفرة <i data-lucide="arrow-up-left"></i></span></article>
+        <article class="workflow-card featured"><div class="step-number">02</div><div class="step-icon blue"><i data-lucide="key-round"></i></div><h3>توليد المفتاح</h3><p>يصلك مفتاح فريد يحدد المستند وعدد النسخ المسموح بها.</p><span class="step-link">مفتاح فريد لكل طلب <i data-lucide="arrow-up-left"></i></span></article>
+        <article class="workflow-card"><div class="step-number">03</div><div class="step-icon yellow"><i data-lucide="file-check-2"></i></div><h3>الطباعة الآمنة</h3><p>فعّل مفتاحك، راجع المستند، ثم اطبع بثقة وبدون نسخ زائدة.</p><span class="step-link">حماية ضد المسح <i data-lucide="arrow-up-left"></i></span></article>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="purchase-dialog" id="purchase-dialog"><button class="dialog-close" id="purchase-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">شراء وثيقة</div><h2 id="purchase-title">اختر عدد النسخ</h2><p class="dialog-subtitle">كل نسخة لها رقم ضمن ترخيصك ويمكن طباعتها مرة واحدة.</p><div class="quantity-control"><button type="button" id="quantity-minus" aria-label="تقليل العدد"><i data-lucide="minus"></i></button><strong id="quantity-value">1</strong><button type="button" id="quantity-plus" aria-label="زيادة العدد"><i data-lucide="plus"></i></button></div><div class="purchase-total"><span>الإجمالي</span><strong><span id="purchase-total">120</span> دج</strong></div><button class="primary-button full-button" id="continue-payment" type="button">المتابعة إلى الدفع <i data-lucide="arrow-left"></i></button></dialog>
+  <dialog class="payment-dialog" id="payment-dialog"><button class="dialog-close" id="payment-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="payment-badge"><i data-lucide="lock-keyhole"></i> دفع آمن</div><div class="section-kicker">إتمام الطلب</div><h2>افتح وثيقتك الآن</h2><p class="dialog-subtitle" id="payment-summary">سيتم تحويلك إلى بوابة الدفع الرسمية.</p><button class="primary-button full-button" id="start-provider-checkout" type="button">الانتقال إلى بوابة الدفع <i data-lucide="arrow-left"></i></button></dialog>
+  <dialog class="upload-details-dialog" id="upload-details-dialog"><button class="dialog-close" id="upload-details-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="file-pen-line"></i></div><div class="section-kicker">تفاصيل الوثيقة</div><h2>سمِّ الوثيقة وحدد سعرها</h2><p class="dialog-subtitle" id="upload-file-name">سيتم حفظها في مكتبة الوثائق.</p><label>اسم الوثيقة<input id="uploaded-title" placeholder="مثال: شهادة إتمام الدورة" /></label><label>سعر النسخة بالدينار<input id="uploaded-price" type="number" min="0" step="1" placeholder="120" /></label><button class="primary-button full-button" id="save-uploaded-document" type="button">حفظ وإضافة إلى المكتبة <i data-lucide="check"></i></button></dialog>
+  <dialog class="admin-login-dialog" id="admin-login-dialog"><button class="dialog-close" id="admin-login-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="shield-lock"></i></div><div class="section-kicker">صلاحية المسؤول</div><h2>دخول خاص</h2><p class="dialog-subtitle">يتم التحقق من جلسة حساب المسؤول عبر Supabase. لا يوجد رمز محفوظ داخل المتصفح.</p><button class="primary-button full-button" id="admin-login-submit" type="button">التحقق من الصلاحية <i data-lucide="unlock"></i></button></dialog>
+
+  <footer><div class="brand mini"><span class="brand-mark"><i data-lucide="scan-line"></i></span><strong>مِداد</strong></div><span>© 2026 منصة مِداد للوثائق الآمنة</span><span class="footer-secure"><i data-lucide="shield"></i> خصوصيتك أولاً</span></footer>
+
+  <dialog class="privacy-dialog" id="privacy-dialog">
+    <button class="dialog-close" id="privacy-dialog-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button>
+    <div class="dialog-icon"><i data-lucide="shield-check"></i></div>
+    <div class="section-kicker">سياسة الخصوصية</div>
+    <h2>بياناتك تبقى في مساحة آمنة</h2>
+    <p>نستخدم مفتاح الترخيص فقط للتحقق من صلاحية الوثيقة وعدد النسخ المتبقية. لا نبيع بياناتك ولا نعرض محتوى الوثيقة قبل التفعيل.</p>
+    <p>يتم تسجيل عملية الطباعة المرتبطة بالمفتاح لمنع النسخ غير المصرح به. يمكنك إغلاق هذه النافذة والعودة إلى التفعيل في أي وقت.</p>
+  </dialog>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- مكتبة Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- ملف السكربت الخاص بالتطبيق -->
+  <script type="module" src="app.js?v=15"></script>
+</body>
+</html>
