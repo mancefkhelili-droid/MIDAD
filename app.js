@@ -1,10 +1,20 @@
-import * as THREE from 'https://esm.sh/three@0.160.0';
-import { OrbitControls } from 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
+let THREE;
+let OrbitControls;
+let pdfjsLib;
+const threeReady = Promise.all([
+  import('https://esm.sh/three@0.160.0'),
+  import('https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js')
+]).then(([threeModule, controlsModule]) => {
+  THREE = threeModule;
+  OrbitControls = controlsModule.OrbitControls;
+}).catch(() => null);
+const pdfReady = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs')
+  .then((pdfModule) => {
+    pdfjsLib = pdfModule;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  }).catch(() => null);
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
-
-const SUPABASE_URL = 'https://apfslkcwhmeyqmnztsao.supabase.co';
+const SUPABASE_URL = 'https://epislkcmkneyqmonzias.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_iLzGnNdv5eTCVKaCnbFTzg_mQV_37xp';
 const supabase = SUPABASE_ANON_KEY.startsWith('sb_') && window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -18,6 +28,29 @@ const documentCatalog = {
 let selectedDocument = 'certificate';
 let selectedQuantity = 1;
 let pendingUpload = null;
+let pendingCheckout = null;
+let authMode = 'signup';
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => registration.unregister()));
+  if ('caches' in window) caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+}
+
+function savePendingCheckout(checkout) {
+  pendingCheckout = checkout;
+  sessionStorage.setItem('pending-checkout', JSON.stringify(checkout));
+}
+
+function restorePendingCheckout() {
+  const savedCheckout = sessionStorage.getItem('pending-checkout');
+  if (!savedCheckout) return null;
+  try {
+    pendingCheckout = JSON.parse(savedCheckout);
+  } catch {
+    sessionStorage.removeItem('pending-checkout');
+  }
+  return pendingCheckout;
+}
 
 const $ = (selector) => document.querySelector(selector);
 let activeLicense = null;
@@ -26,6 +59,36 @@ let isAdmin = false;
 function renderAdminAccess() {
   $('#admin-upload-button').classList.toggle('is-hidden', isAdmin);
   $('#upload-document-button').classList.toggle('is-hidden', !isAdmin);
+}
+
+function renderAccount(user) {
+  const accountStatus = $('#account-status');
+  accountStatus.classList.toggle('is-hidden', !user);
+  if (user) $('#account-email').textContent = user.email || 'حساب متصل';
+}
+
+async function loadAccountHistory() {
+  const list = $('#account-orders');
+  const summary = $('#account-summary');
+  list.innerHTML = '<div class="account-empty">جارٍ تحميل الطلبات...</div>';
+  const { data: orders, error: ordersError } = await supabase.from('orders').select('id,calculated_price,currency,copies_count,status,created_at,documents(title)').order('created_at', { ascending: false });
+  if (ordersError) {
+    list.innerHTML = '<div class="account-empty">تعذر تحميل الطلبات الآن.</div>';
+    summary.textContent = ordersError.message;
+    return;
+  }
+  const { data: licenses } = await supabase.from('print_licenses').select('order_id,license_key,prints_remaining,total_prints_allowed,documents(title)');
+  const licensesByOrder = new Map((licenses ?? []).map((license) => [license.order_id, license]));
+  summary.textContent = `${orders.length} طلبات محفوظة في حسابك`;
+  if (!orders.length) {
+    list.innerHTML = '<div class="account-empty">لا توجد طلبات بعد.</div>';
+    return;
+  }
+  list.innerHTML = orders.map((order) => {
+    const license = licensesByOrder.get(order.id);
+    const status = order.status === 'paid' ? 'مدفوع' : order.status === 'pending' ? 'قيد الانتظار' : order.status === 'failed' ? 'فشل' : 'ملغى';
+    return `<article class="order-item"><div class="order-item-top"><span>${escapeHtml(order.documents?.title ?? 'وثيقة')}</span><span>${status}</span></div><small>${order.copies_count} نسخة / ${order.calculated_price} ${escapeHtml(order.currency)} / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}</small>${license ? `<div class="license-line"><span>${escapeHtml(license.license_key)}</span><span>${license.prints_remaining}/${license.total_prints_allowed}</span></div>` : ''}</article>`;
+  }).join('');
 }
 
 function syncConsentState() {
@@ -50,6 +113,14 @@ function renderLicense(license) {
   $('#doc-id').textContent = license.access_key.slice(-6);
   $('#document-title').textContent = license.document.title;
   $('#document-content').innerHTML = license.document.content;
+  supabase?.auth.getUser().then(({ data: { user } }) => {
+    const watermark = user?.email ? `مِداد / ${user.email} / ${license.access_key.slice(-8)}` : `مِداد / ${license.access_key.slice(-8)}`;
+    document.querySelectorAll('.paper-watermark').forEach((element) => {
+      element.textContent = watermark;
+      element.dataset.watermark = watermark;
+    });
+    document.body.dataset.printWatermark = watermark;
+  });
   $('#prints-remaining').textContent = remaining;
   $('#prints-used').textContent = used;
   $('#total-prints').textContent = total;
@@ -95,8 +166,8 @@ $('#activation-form').addEventListener('submit', async (event) => {
     return;
   }
   const key = $('#license-key').value.trim().toUpperCase();
-  if (!/^KEY-[A-Z0-9]{6}$/.test(key)) {
-    setNotice('صيغة المفتاح غير صحيحة. استخدم KEY-XXXXXX.', 'error');
+  if (!/^LIC-[A-Z0-9-]{20,64}$/.test(key)) {
+    setNotice('صيغة المفتاح غير صحيحة. استخدم مفتاح LIC الصحيح.', 'error');
     return;
   }
   const button = event.currentTarget.querySelector('button');
@@ -117,7 +188,12 @@ $('#activation-form').addEventListener('submit', async (event) => {
 $('#privacy-consent').addEventListener('change', syncConsentState);
 
 $('#print-button').addEventListener('click', async () => {
-  if (!activeLicense || activeLicense.prints_remaining <= 0) return;
+  if (!activeLicense || activeLicense.prints_remaining <= 0 || !supabase) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    setNotice('سجّل الدخول قبل الطباعة.', 'error');
+    return;
+  }
   const button = $('#print-button');
   button.disabled = true;
   try {
@@ -140,6 +216,43 @@ async function startCheckout(documentId, copiesCount) {
   const { data, error } = await supabase.functions.invoke('create-checkout', { body: { document_id: documentId, copies_count: copiesCount } });
   if (error || !data?.checkout_url) throw new Error(error?.message ?? data?.error ?? 'تعذر إنشاء جلسة الدفع.');
   window.location.assign(data.checkout_url);
+}
+
+function setAuthFeedback(message, type = '') {
+  const feedback = $('#auth-feedback');
+  feedback.textContent = message;
+  feedback.className = `auth-feedback ${type}`;
+}
+
+function openAuthDialog(mode = 'signup') {
+  authMode = mode;
+  $('#auth-title').textContent = mode === 'signup' ? 'أنشئ حسابك لإتمام الشراء' : mode === 'reset' ? 'أنشئ كلمة مرور جديدة' : 'سجّل الدخول لإتمام الشراء';
+  $('#auth-subtitle').textContent = mode === 'signup' ? 'احفظ تراخيصك وعمليات الطباعة في حساب آمن.' : mode === 'reset' ? 'اختر كلمة مرور جديدة لحماية حسابك.' : 'استخدم حسابك للوصول إلى طلباتك وتراخيصك.';
+  $('#auth-submit').childNodes[0].textContent = mode === 'signup' ? 'إنشاء حساب ' : mode === 'reset' ? 'حفظ كلمة المرور ' : 'تسجيل الدخول ';
+  $('#auth-switch').textContent = mode === 'signup' ? 'لديك حساب؟ تسجيل الدخول' : 'ليس لديك حساب؟ إنشاء حساب';
+  $('#auth-email').closest('label').classList.toggle('is-hidden', mode === 'reset');
+  $('#auth-email').required = mode !== 'reset';
+  $('#forgot-password').classList.toggle('is-hidden', mode !== 'login');
+  $('#auth-switch').classList.toggle('is-hidden', mode === 'reset');
+  document.querySelector('.oauth-divider').classList.toggle('is-hidden', mode === 'reset');
+  document.querySelector('.oauth-buttons').classList.toggle('is-hidden', mode === 'reset');
+  setAuthFeedback('');
+  if (!$('#auth-dialog').open) $('#auth-dialog').showModal();
+  window.lucide?.createIcons();
+}
+
+async function continuePendingCheckout() {
+  const checkout = pendingCheckout;
+  pendingCheckout = null;
+  sessionStorage.removeItem('pending-checkout');
+  $('#auth-dialog').close();
+  if (checkout) {
+    try {
+      await startCheckout(checkout.documentId, checkout.copiesCount);
+    } catch (error) {
+      setNotice(error.message, 'error');
+    }
+  }
 }
 
 function openPurchase(documentId) {
@@ -177,6 +290,8 @@ function readUploadedDocument(file) {
   const title = file.name.replace(/\.[^.]+$/, '');
   if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
     return file.arrayBuffer().then(async (buffer) => {
+      await pdfReady;
+      if (!pdfjsLib) throw new Error('تعذر قراءة PDF دون اتصال بالإنترنت. استخدم ملفًا نصيًا أو صورة.');
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
       const page = await pdf.getPage(1);
       const viewport = page.getViewport({ scale: 3 });
@@ -262,8 +377,96 @@ $('#continue-payment').addEventListener('click', () => {
 });
 $('#start-provider-checkout').addEventListener('click', () => {
   const item = documentCatalog[selectedDocument];
-  startCheckout(item.document_id, selectedQuantity).catch((error) => setNotice(error.message, 'error'));
+  if (!supabase) {
+    setNotice('يجب إعداد Supabase أولًا.', 'error');
+    return;
+  }
+  supabase.auth.getUser().then(({ data: { user } }) => {
+    if (!user) {
+      savePendingCheckout({ documentId: item.document_id, copiesCount: selectedQuantity });
+      $('#payment-dialog').close();
+      openAuthDialog();
+      return;
+    }
+    startCheckout(item.document_id, selectedQuantity).catch((error) => setNotice(error.message, 'error'));
+  }).catch((error) => setNotice(error.message, 'error'));
 });
+
+$('#auth-close').addEventListener('click', () => $('#auth-dialog').close());
+$('#auth-switch').addEventListener('click', () => openAuthDialog(authMode === 'signup' ? 'login' : 'signup'));
+$('#forgot-password').addEventListener('click', async () => {
+  if (!supabase) return setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
+  const email = $('#auth-email').value.trim();
+  if (!email) return setAuthFeedback('أدخل بريدك الإلكتروني أولًا.', 'error');
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+  setAuthFeedback(error ? error.message : 'تم إرسال رابط استرجاع كلمة المرور إلى بريدك.', error ? 'error' : 'success');
+});
+$('#auth-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!supabase) {
+    setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
+    return;
+  }
+  const email = $('#auth-email').value.trim();
+  const password = $('#auth-password').value;
+  const submit = $('#auth-submit');
+  submit.disabled = true;
+  setAuthFeedback('جارٍ التحقق...');
+  try {
+    const result = authMode === 'reset'
+      ? await supabase.auth.updateUser({ password })
+      : authMode === 'signup'
+        ? await supabase.auth.signUp({ email, password })
+        : await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) throw result.error;
+    if (authMode === 'reset') {
+      setAuthFeedback('تم تحديث كلمة المرور بنجاح.', 'success');
+      $('#auth-dialog').close();
+      return;
+    }
+    if (authMode === 'signup' && !result.data.session) {
+      setAuthFeedback('تم إنشاء الحساب. تحقق من بريدك الإلكتروني ثم سجّل الدخول.', 'success');
+      openAuthDialog('login');
+      return;
+    }
+    await continuePendingCheckout();
+  } catch (error) {
+    setAuthFeedback(error.message || 'تعذر إتمام العملية.', 'error');
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+async function startOAuth(provider) {
+  if (!supabase) {
+    setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
+    return;
+  }
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) setAuthFeedback(error.message, 'error');
+}
+
+$('#google-auth').addEventListener('click', () => startOAuth('google'));
+$('#github-auth').addEventListener('click', () => startOAuth('github'));
+$('#account-logout').addEventListener('click', async () => {
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) setNotice(error.message, 'error');
+  else {
+    renderAccount(null);
+    activeLicense = null;
+    setNotice('تم تسجيل الخروج.', 'success');
+  }
+});
+$('#account-open').addEventListener('click', async () => {
+  if (!supabase) return;
+  $('#account-dialog').showModal();
+  await loadAccountHistory();
+});
+$('#account-close').addEventListener('click', () => $('#account-dialog').close());
 document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); }));
 
 document.addEventListener('keydown', (event) => {
@@ -277,7 +480,18 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+function setDocumentObscured(isObscured) {
+  document.body.classList.toggle('is-obscured', isObscured);
+}
+
+window.addEventListener('blur', () => setDocumentObscured(true));
+window.addEventListener('focus', () => setDocumentObscured(false));
+
 function create3DScene() {
+  if (!THREE || !OrbitControls) {
+    $('#three-scene').setAttribute('aria-label', 'المعاينة ثلاثية الأبعاد غير متاحة دون اتصال');
+    return;
+  }
   const mount = $('#three-scene');
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(32, mount.clientWidth / mount.clientHeight, .1, 100);
@@ -355,6 +569,18 @@ window.lucide?.createIcons();
 renderAdminAccess();
 syncConsentState();
 create3DScene();
+restorePendingCheckout();
+supabase?.auth.getSession().then(({ data: { session } }) => {
+  renderAccount(session?.user ?? null);
+  if (session && pendingCheckout) continuePendingCheckout();
+});
+supabase?.auth.onAuthStateChange((event, session) => {
+  renderAccount(session?.user ?? null);
+  if (event === 'PASSWORD_RECOVERY') openAuthDialog('reset');
+});
+threeReady.then(() => {
+  if (!$('#three-scene').dataset.ready) create3DScene();
+});
 
 const privacyDialog = $('#privacy-dialog');
 $('#privacy-policy-link').addEventListener('click', () => privacyDialog.showModal());
