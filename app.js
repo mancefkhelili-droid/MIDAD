@@ -29,7 +29,9 @@ let selectedDocument = 'certificate';
 let selectedQuantity = 1;
 let pendingUpload = null;
 let pendingCheckout = null;
-let authMode = 'signup';
+let authMode = 'login';
+let checkoutResumeStarted = false;
+const ADMIN_EMAIL_LOCAL_PART = 'mancefkhelili';
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => registration.unregister()));
@@ -57,14 +59,28 @@ let activeLicense = null;
 let isAdmin = false;
 
 function renderAdminAccess() {
-  $('#admin-upload-button').classList.toggle('is-hidden', isAdmin);
   $('#upload-document-button').classList.toggle('is-hidden', !isAdmin);
+}
+
+function updateAdminAccess(user) {
+  const emailLocalPart = user?.email?.split('@')[0]?.toLowerCase();
+  isAdmin = user?.user_metadata?.role === 'admin' || emailLocalPart === ADMIN_EMAIL_LOCAL_PART;
+  renderAdminAccess();
 }
 
 function renderAccount(user) {
   const accountStatus = $('#account-status');
   accountStatus.classList.toggle('is-hidden', !user);
-  if (user) $('#account-email').textContent = user.email || 'حساب متصل';
+  if (user) {
+    const email = user.email || 'حساب متصل';
+    const provider = user.app_metadata?.provider || user.identities?.[0]?.provider || 'email';
+    $('#account-email').textContent = email;
+    $('#profile-email').textContent = email;
+    $('#profile-name').textContent = user.user_metadata?.full_name || user.user_metadata?.name || 'حسابي';
+    $('#profile-avatar').textContent = (user.user_metadata?.full_name || user.user_metadata?.name || email).trim().charAt(0).toUpperCase();
+    $('#profile-provider').textContent = provider === 'google' ? 'Google' : provider === 'github' ? 'GitHub' : 'البريد الإلكتروني';
+    $('#profile-role').textContent = isAdmin ? 'مسؤول' : 'مشتري';
+  }
 }
 
 async function loadAccountHistory() {
@@ -242,7 +258,9 @@ function openAuthDialog(mode = 'signup') {
 }
 
 async function continuePendingCheckout() {
+  if (checkoutResumeStarted || !pendingCheckout) return;
   const checkout = pendingCheckout;
+  checkoutResumeStarted = true;
   pendingCheckout = null;
   sessionStorage.removeItem('pending-checkout');
   $('#auth-dialog').close();
@@ -310,26 +328,6 @@ function readUploadedDocument(file) {
 }
 
 $('#upload-document-button').addEventListener('click', () => $('#document-upload').click());
-$('#admin-upload-button').addEventListener('click', () => {
-  $('#admin-login-dialog').showModal();
-});
-$('#admin-login-close').addEventListener('click', () => $('#admin-login-dialog').close());
-$('#admin-login-submit').addEventListener('click', () => {
-  if (!supabase) {
-    setNotice('يجب إعداد Supabase وتسجيل دخول حساب المسؤول.', 'error');
-    return;
-  }
-  supabase.auth.getUser().then(({ data: { user } }) => {
-    if (user?.user_metadata?.role !== 'admin') {
-      setNotice('حسابك ليس حساب مسؤول.', 'error');
-      return;
-    }
-    isAdmin = true;
-    $('#admin-login-dialog').close();
-    renderAdminAccess();
-    setNotice('تم التحقق من حساب المسؤول.', 'success');
-  });
-});
 $('#document-upload').addEventListener('change', async (event) => {
   const [file] = event.target.files;
   if (!file) return;
@@ -385,7 +383,7 @@ $('#start-provider-checkout').addEventListener('click', () => {
     if (!user) {
       savePendingCheckout({ documentId: item.document_id, copiesCount: selectedQuantity });
       $('#payment-dialog').close();
-      openAuthDialog();
+      openAuthDialog('login');
       return;
     }
     startCheckout(item.document_id, selectedQuantity).catch((error) => setNotice(error.message, 'error'));
@@ -571,12 +569,15 @@ syncConsentState();
 create3DScene();
 restorePendingCheckout();
 supabase?.auth.getSession().then(({ data: { session } }) => {
+  updateAdminAccess(session?.user ?? null);
   renderAccount(session?.user ?? null);
   if (session && pendingCheckout) continuePendingCheckout();
 });
 supabase?.auth.onAuthStateChange((event, session) => {
+  updateAdminAccess(session?.user ?? null);
   renderAccount(session?.user ?? null);
   if (event === 'PASSWORD_RECOVERY') openAuthDialog('reset');
+  if (event === 'SIGNED_IN' && pendingCheckout) continuePendingCheckout();
 });
 threeReady.then(() => {
   if (!$('#three-scene').dataset.ready) create3DScene();
