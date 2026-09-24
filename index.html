@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f8fafc" />
   <meta name="description" content="منصة آمنة للتحقق من تراخيص المستندات والطباعة الرقمية" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://apfslkcwhmeyqmnztsao.supabase.co https://unpkg.com https://esm.sh https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-src https://apfslkcwhmeyqmnztsao.supabase.co;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' data: blob:; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://epislkcmkneyqmonzias.supabase.co https://unpkg.com https://esm.sh https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-src https://epislkcmkneyqmonzias.supabase.co;" />
   <title>مِداد | ترخيص الطباعة الآمنة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <div class="privacy-shield" aria-hidden="true"></div>
@@ -22,13 +25,54 @@
       <a href="#how-it-works">كيف تعمل؟</a>
       <a href="#security">الأمان</a>
     </nav>
-    <div class="header-actions"><div class="account-status is-hidden" id="account-status"><span class="account-email" id="account-email"></span><button id="account-open" type="button">حسابي</button><button id="account-logout" type="button">خروج</button></div><div class="header-status"><span class="pulse-dot"></span> النظام يعمل بكفاءة</div></div>
+    <div class="header-actions">
+      <!-- زر الدخول - يظهر عند عدم تسجيل الدخول -->
+      <button class="login-trigger" id="login-trigger" type="button" aria-label="تسجيل الدخول">
+        <i data-lucide="user-round"></i>
+        <span>دخول</span>
+      </button>
+      <!-- بروفايل المستخدم - يظهر بعد تسجيل الدخول -->
+      <div class="user-profile is-hidden" id="user-profile">
+        <button class="profile-trigger" id="profile-trigger" type="button" aria-label="حسابي" aria-expanded="false">
+          <span class="profile-avatar-mini" id="profile-avatar-mini">م</span>
+          <div class="profile-trigger-info">
+            <span class="profile-trigger-name" id="profile-trigger-name">حسابي</span>
+            <span class="profile-trigger-email" id="profile-trigger-email"></span>
+          </div>
+          <i data-lucide="chevron-down" class="profile-chevron"></i>
+        </button>
+        <!-- القائمة المنسدلة -->
+        <div class="profile-dropdown" id="profile-dropdown" inert>
+          <div class="profile-dropdown-header">
+            <div class="profile-dropdown-avatar" id="profile-dropdown-avatar">م</div>
+            <div>
+              <strong id="profile-dropdown-name">حسابي</strong>
+              <span id="profile-dropdown-email"></span>
+            </div>
+          </div>
+          <hr class="profile-divider" />
+          <button class="profile-menu-item" id="account-open" type="button">
+            <i data-lucide="receipt-text"></i> طلباتي وتراخيصي
+          </button>
+          <hr class="profile-divider" />
+          <button class="profile-menu-item danger" id="account-logout" type="button">
+            <i data-lucide="log-out"></i> تسجيل الخروج
+          </button>
+        </div>
+      </div>
+    </div>
   </header>
 
   <main id="top">
     <section class="catalog-section" id="workspace" aria-labelledby="catalog-title">
       <div class="catalog-intro"><div><div class="eyebrow"><span class="eyebrow-line"></span> مكتبة الوثائق</div><h1 id="catalog-title">اختر وثيقتك،<br /><em>واطبع بثقة.</em></h1></div><p>اشترِ عدد النسخ الذي تحتاجه، ثم يصلك مفتاح آمن لفتح وثيقتك ومعاينتها ثلاثية الأبعاد.</p></div>
-      <div class="catalog-actions"><span>يمكنك شراء وثيقة جاهزة. رفع الملفات متاح للحساب المسؤول فقط.</span><button class="upload-document-button is-hidden" id="upload-document-button" type="button"><i data-lucide="upload"></i> إضافة ملف</button><input id="document-upload" type="file" accept=".txt,.md,.html,.htm,.pdf,image/*" hidden /></div>
+      <div class="catalog-actions">
+        <span>اختر وثيقتك واشترِ العدد الذي تحتاجه.</span>
+        <button class="admin-upload-button is-hidden" id="admin-add-doc-trigger" type="button">
+          <i data-lucide="plus-circle"></i>
+          <span>إضافة وثيقة جديدة إلى Supabase (المسؤول)</span>
+        </button>
+      </div>
       <div class="document-catalog">
         <article class="catalog-card" data-document="certificate"><div class="catalog-preview mint-preview"><i data-lucide="award"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">شهادة مهنية</span><h2>شهادة المشاركة المهنية</h2><p>وثيقة رسمية قابلة للتحقق مع حماية ضد المسح والنسخ.</p><div class="catalog-footer"><strong>120 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="certificate" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
         <article class="catalog-card" data-document="attendance"><div class="catalog-preview blue-preview"><i data-lucide="calendar-check-2"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">سجل حضور</span><h2>وثيقة إثبات الحضور</h2><p>سجل موثق للفعاليات والدورات مع عدد نسخ قابل للتخصيص.</p><div class="catalog-footer"><strong>80 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="attendance" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
@@ -54,18 +98,149 @@
       <div class="section-kicker">02 <span></span> المستند المحمي</div>
       <div class="document-layout">
         <div class="document-viewer">
-          <div class="viewer-topline"><span class="live-label"><span class="live-dot"></span> معاينة حية</span><span class="viewer-id">DOC-<span id="doc-id">••••••</span></span></div>
-          <div class="scene-wrap document-scene" aria-label="معاينة ثلاثية الأبعاد للمستند الآمن"><div class="scene-halo"></div><div id="three-scene"></div><div class="scene-lock" id="scene-lock"><i data-lucide="file-lock-2"></i><strong>المستند ثلاثي الأبعاد مقفل</strong><span>فعّل الترخيص لعرض الوثيقة</span></div></div>
+          <div class="viewer-topline">
+            <span class="live-label"><span class="live-dot"></span> استوديو التعديل والمعاينة المباشرة</span>
+            <span class="edit-mode-badge is-hidden" id="edit-mode-badge"><i data-lucide="sparkles"></i> وضع التحرير التفاعلي مفعل</span>
+            <span class="viewer-id">DOC-<span id="doc-id">••••••</span></span>
+          </div>
+
+          <!-- شريط أدوات التحرير والتنسيق التفاعلي الشامل -->
+          <div class="editor-toolbar is-hidden" id="editor-toolbar" aria-label="أدوات التنسيق والتعديل الكامل">
+            <!-- الخط وحجمه -->
+            <div class="toolbar-group">
+              <select id="toolbar-font-family" class="toolbar-select" title="نوع الخط العربي">
+                <option value="'Tajawal', sans-serif">خط تجوال (Tajawal)</option>
+                <option value="'Cairo', sans-serif">خط القاهرة (Cairo)</option>
+                <option value="'Amiri', serif">خط أميري (Amiri)</option>
+                <option value="'Almarai', sans-serif">خط المراعي (Almarai)</option>
+                <option value="'Traditional Arabic', serif">خط عربي تقليدي</option>
+                <option value="'Courier New', monospace">آلة حاسبة / Monospace</option>
+              </select>
+
+              <select id="toolbar-font-size" class="toolbar-select" title="حجم الخط">
+                <option value="12px">12px - صغير جدًا</option>
+                <option value="14px">14px - صغير</option>
+                <option value="16px" selected>16px - عادي</option>
+                <option value="18px">18px - متوسط</option>
+                <option value="22px">22px - كبير</option>
+                <option value="28px">28px - عنوان فرعي</option>
+                <option value="36px">36px - عنوان رئيسي</option>
+                <option value="48px">48px - ضخم</option>
+              </select>
+
+              <button type="button" class="toolbar-btn icon-only" id="btn-font-decrease" title="تصغير الخط (A-)">A-</button>
+              <button type="button" class="toolbar-btn icon-only" id="btn-font-increase" title="تكبير الخط (A+)">A+</button>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <!-- أنماط النص -->
+            <div class="toolbar-group">
+              <button type="button" class="toolbar-btn" id="btn-bold" title="عريض (Ctrl+B)"><i data-lucide="bold"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-italic" title="مائل (Ctrl+I)"><i data-lucide="italic"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-underline" title="تحته خط (Ctrl+U)"><i data-lucide="underline"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-strikethrough" title="يتوسطه خط"><i data-lucide="strikethrough"></i></button>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <!-- الألوان والتظليل -->
+            <div class="toolbar-group">
+              <label class="color-picker-label" title="لون النص الأساسي">
+                <i data-lucide="palette"></i>
+                <input type="color" id="toolbar-text-color" value="#0f172a" />
+              </label>
+              <label class="color-picker-label bg-label" title="لون خلفية / تظليل النص">
+                <i data-lucide="highlighter"></i>
+                <input type="color" id="toolbar-bg-color" value="#ffffff" />
+              </label>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <!-- محاذاة النص -->
+            <div class="toolbar-group">
+              <button type="button" class="toolbar-btn" id="btn-align-right" title="محاذاة لليمين"><i data-lucide="align-right"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-align-center" title="توسيط النص"><i data-lucide="align-center"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-align-left" title="محاذاة لليسار"><i data-lucide="align-left"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-align-justify" title="ضبط الحواف"><i data-lucide="align-justify"></i></button>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <!-- ثيم الورقة وتباعد الأسطر -->
+            <div class="toolbar-group">
+              <select id="toolbar-paper-theme" class="toolbar-select" title="طابع لون خلفية الورقة">
+                <option value="paper-theme-white">ورقة بيضاء (افتراضي)</option>
+                <option value="paper-theme-ivory">عاجي ملكي (Ivory)</option>
+                <option value="paper-theme-slate">رمادي معتمد (Slate)</option>
+                <option value="paper-theme-cyan">سماوي ناعم (Azure)</option>
+              </select>
+
+              <select id="toolbar-line-height" class="toolbar-select" title="تباعد الأسطر">
+                <option value="1.3">أسطر ضيقة</option>
+                <option value="1.6" selected>أسطر عادية</option>
+                <option value="2.0">أسطر متباعدة</option>
+                <option value="2.4">أسطر واسعة</option>
+              </select>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <!-- أدوات الإضافة وإعادة الضبط -->
+            <div class="toolbar-group">
+              <button type="button" class="toolbar-btn" id="btn-add-paragraph" title="إضافة فقرة جديدة"><i data-lucide="plus-circle"></i> <span>فقرة</span></button>
+              <button type="button" class="toolbar-btn" id="btn-add-recipient" title="تخصيص اسم المستفيد"><i data-lucide="user-check"></i> <span>المستفيد</span></button>
+              <button type="button" class="toolbar-btn" id="btn-clear-format" title="إزالة جميع التنسيقات"><i data-lucide="remove-formatting"></i></button>
+              <button type="button" class="toolbar-btn danger" id="btn-reset-doc" title="إعادة ضبط المحتوى للأصلي"><i data-lucide="rotate-ccw"></i></button>
+            </div>
+          </div>
+
+          <!-- قفل المعاينة قبل التفعيل -->
+          <div class="scene-lock" id="scene-lock">
+            <i data-lucide="file-lock-2"></i>
+            <strong>المستند مقفل</strong>
+            <span>أدخل مفتاح الترخيص لفتح القالب واستخدام محرر التعديل المباشر</span>
+          </div>
+
+          <!-- الورقة التفاعلية الرئيسية -->
           <div class="document-paper" id="document-paper">
             <div class="paper-watermark">مِداد</div>
             <div class="moire-pattern"></div>
             <div class="paper-content">
-              <div class="paper-meta"><span id="doc-category">مستند موثّق</span><span id="doc-date">18 سبتمبر 2026</span></div>
-              <div class="paper-seal"><i data-lucide="shield-check"></i><span>VERIFIED</span></div>
-              <h2 id="document-title">بانتظار التفعيل</h2>
+              <div class="paper-header-strip">
+                <div class="paper-meta">
+                  <span id="doc-category" class="editable-field" title="انقر لتعديل التصنيف">شهادة توثيق رقمية</span>
+                  <span id="doc-date" class="editable-field" title="انقر لتعديل التاريخ">18 سبتمبر 2026</span>
+                </div>
+                <div class="paper-seal"><i data-lucide="shield-check"></i><span>VERIFIED</span></div>
+              </div>
+
+              <h2 id="document-title" class="editable-field document-main-title" title="انقر لتعديل العنوان">بانتظار التفعيل</h2>
+              <div class="recipient-box" id="recipient-box">
+                <span class="recipient-label">تمنح هذه الوثيقة إلى:</span>
+                <strong id="document-recipient" class="editable-field recipient-name" title="انقر لتعديل اسم المستفيد">[انقر هنا لإدخال اسم المشتري / المستفيد]</strong>
+              </div>
               <div class="paper-rule"></div>
-              <div id="document-content" class="document-body"><p>سيظهر محتوى المستند هنا بعد التحقق من مفتاح الترخيص. كل عنصر في هذه المعاينة يحمل طبقة حماية مرئية وغير مرئية.</p><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-              <div class="paper-footer"><span>مِداد / نسخة مرخّصة</span><span class="secure-foot"><i data-lucide="fingerprint"></i> محمي</span></div>
+              <div id="document-content" class="document-body editable-field" title="انقر لتعديل النص">
+                <p>سيظهر محتوى المستند التفاعلي هنا فور تفعيل مفتاح الترخيص. يمكنك الضغط على أي جزء من هذه الورقة لتعديل النصوص وتخصيصها بالكامل قبل إتمام الطباعة.</p>
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line short"></div>
+              </div>
+              <div class="paper-signatures">
+                <div class="sig-block">
+                  <span class="sig-title">اعتماد المنصة</span>
+                  <div class="sig-stamp"><i data-lucide="award"></i> <span>مِداد / رسمية</span></div>
+                </div>
+                <div class="sig-block">
+                  <span class="sig-title">توقيع المستلم / الجهة</span>
+                  <div class="sig-line editable-field" id="document-signature-line" title="انقر للتعديل">[توقيع أو اعتماد الجهة]</div>
+                </div>
+              </div>
+              <div class="paper-footer">
+                <span>مِداد / وثيقة تفاعلية مرخّصة</span>
+                <span class="secure-foot"><i data-lucide="fingerprint"></i> محمي برقم تسلسلي</span>
+              </div>
             </div>
           </div>
         </div>
@@ -96,6 +271,22 @@
   <dialog class="account-dialog" id="account-dialog"><button class="dialog-close" id="account-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">الملف الشخصي</div><div class="profile-header"><div class="profile-avatar" id="profile-avatar">م</div><div><h2 id="profile-name">حسابي</h2><p class="profile-email" id="profile-email">-</p></div></div><div class="profile-details"><div><span>طريقة الدخول</span><strong id="profile-provider">-</strong></div><div><span>نوع الحساب</span><strong id="profile-role">مشتري</strong></div></div><div class="account-section-title"><h3>طلباتي وتراخيصي</h3><p class="dialog-subtitle" id="account-summary">جارٍ تحميل البيانات...</p></div><div class="account-orders" id="account-orders"></div></dialog>
   <dialog class="upload-details-dialog" id="upload-details-dialog"><button class="dialog-close" id="upload-details-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="file-pen-line"></i></div><div class="section-kicker">تفاصيل الوثيقة</div><h2>سمِّ الوثيقة وحدد سعرها</h2><p class="dialog-subtitle" id="upload-file-name">سيتم حفظها في مكتبة الوثائق.</p><label>اسم الوثيقة<input id="uploaded-title" placeholder="مثال: شهادة إتمام الدورة" /></label><label>سعر النسخة بالدينار<input id="uploaded-price" type="number" min="0" step="1" placeholder="120" /></label><button class="primary-button full-button" id="save-uploaded-document" type="button">حفظ وإضافة إلى المكتبة <i data-lucide="check"></i></button></dialog>
 
+  <!-- نافذة إضافة وثيقة جديدة إلى Supabase لـ Admin -->
+  <dialog class="admin-login-dialog" id="admin-add-doc-dialog">
+    <button class="dialog-close" id="admin-add-doc-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button>
+    <div class="dialog-icon"><i data-lucide="database-zap"></i></div>
+    <div class="section-kicker">لوحة المسؤول</div>
+    <h2>إضافة وثيقة جديدة إلى Supabase</h2>
+    <p class="dialog-subtitle">ستُحفظ الوثيقة مباشرة في قاعدة البيانات وتظهر فوراً في مكتبة الوثائق للمستعملين.</p>
+    <form id="admin-add-doc-form">
+      <label>عنوان الوثيقة<input id="admin-doc-title" required placeholder="مثال: دبلوم تخرج مهني معتمد" /></label>
+      <label>التصنيف / النوع<input id="admin-doc-category" required placeholder="مثال: دبلوم معتمد" /></label>
+      <label>سعر النسخة بالدينار (DZD)<input id="admin-doc-price" type="number" min="0" step="1" required placeholder="150" /></label>
+      <label>محتوى الوثيقة الرسمي<textarea id="admin-doc-content" rows="4" style="width:100%;margin-top:6px;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font:14px 'Tajawal',sans-serif;" required placeholder="أدخل محتوى أو نص الوثيقة الرسمية هنا..."></textarea></label>
+      <button class="primary-button full-button" id="admin-doc-submit" type="submit">حفظ وإضافة إلى Supabase <i data-lucide="database"></i></button>
+    </form>
+  </dialog>
+
   <footer><div class="brand mini"><span class="brand-mark"><i data-lucide="scan-line"></i></span><strong>مِداد</strong></div><span>© 2026 منصة مِداد للوثائق الآمنة</span><span class="footer-secure"><i data-lucide="shield"></i> خصوصيتك أولاً</span></footer>
 
   <dialog class="privacy-dialog" id="privacy-dialog">
@@ -111,6 +302,7 @@
   <!-- مكتبة Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
-  <script type="module" src="app.js?v=16"></script>
+  <script type="module" src="app.js?v=17"></script>
 </body>
 </html>
+

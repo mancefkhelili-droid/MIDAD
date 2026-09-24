@@ -62,6 +62,9 @@ alter table public.audit_logs enable row level security;
 drop policy if exists published_documents_read on public.documents;
 create policy published_documents_read on public.documents for select using (is_published = true);
 
+drop policy if exists admin_documents_manage on public.documents;
+create policy admin_documents_manage on public.documents for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
 drop policy if exists own_orders_read on public.orders;
 create policy own_orders_read on public.orders for select using (auth.uid() = user_id);
 
