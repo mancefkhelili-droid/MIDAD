@@ -17,98 +17,113 @@ const pdfReady = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/p
 const SUPABASE_URL = 'https://epislkcmkneyqmonzias.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_iLzGnNdv5eTCVKaCnbFTzg_mQV_37xp';
 const supabase = window.supabase
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
   : null;
-const documentCatalog = {
-  certificate: { title: 'شهادة المشاركة المهنية', price: 120, category: 'شهادة مهنية', document_id: '61be6e55-3ed6-4839-b8ed-d73ef4923ccd' },
-  attendance: { title: 'وثيقة إثبات الحضور', price: 80, category: 'سجل حضور', document_id: '' },
-  license: { title: 'ترخيص المحتوى الرقمي', price: 200, category: 'ترخيص استخدام', document_id: '' },
-  margine: { title: 'margine', price: 150, category: 'وثيقة PDF', document_id: '61be6e55-3ed6-4839-b8ed-d73ef4923ccd' }
-};
+const documentCatalog = Object.create(null);
 let selectedDocument = 'certificate';
 let selectedQuantity = 1;
-let pendingUpload = null;
-let pendingCheckout = null;
+let pendingPurchase = null;
 let authMode = 'login';
-let checkoutResumeStarted = false;
-const ADMIN_EMAIL_LOCAL_PART = 'mancefkhelili';
+let purchaseAuthCheckPending = false;
+let checkoutReturnStarted = false;
+let pendingReturnStatus = new URLSearchParams(window.location.search).get('status');
+const PENDING_PURCHASE_KEY = 'pending-purchase';
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => registration.unregister()));
   if ('caches' in window) caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
 }
 
-function savePendingCheckout(checkout) {
-  pendingCheckout = checkout;
-  sessionStorage.setItem('pending-checkout', JSON.stringify(checkout));
+function savePendingPurchase(purchase) {
+  pendingPurchase = purchase;
+  sessionStorage.setItem(PENDING_PURCHASE_KEY, JSON.stringify(purchase));
 }
 
-function restorePendingCheckout() {
-  const savedCheckout = sessionStorage.getItem('pending-checkout');
-  if (!savedCheckout) return null;
+function restorePendingPurchase() {
+  const savedPurchase = sessionStorage.getItem(PENDING_PURCHASE_KEY);
+  if (!savedPurchase) return null;
   try {
-    pendingCheckout = JSON.parse(savedCheckout);
+    pendingPurchase = JSON.parse(savedPurchase);
   } catch {
-    sessionStorage.removeItem('pending-checkout');
+    sessionStorage.removeItem(PENDING_PURCHASE_KEY);
   }
-  return pendingCheckout;
+  return pendingPurchase;
 }
 
 const $ = (selector) => document.querySelector(selector);
 let activeLicense = null;
-let isAdmin = false;
-
-function renderAdminAccess() {
-  const trigger = $('#admin-add-doc-trigger');
-  if (trigger) {
-    trigger.classList.toggle('is-hidden', !isAdmin);
-  }
-}
 
 function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', content = '') {
-  documentCatalog[id] = { title, price, category, document_id: id, content };
-  if (document.querySelector(`.catalog-card[data-document="${id}"]`)) return;
+  documentCatalog[id] = { title, price: Number(price), category, document_id: id, content };
+  const existingCard = document.querySelector(`.catalog-card[data-document="${id}"]`);
+  if (existingCard) existingCard.remove();
   const card = document.createElement('article');
   card.className = 'catalog-card uploaded-catalog-card';
   card.dataset.document = id;
-  card.innerHTML = `
-    <div class="catalog-preview uploaded-preview">
-      <i data-lucide="database"></i>
-      <span>MEDAD / SUPABASE</span>
-    </div>
-    <div class="catalog-card-body">
-      <span class="catalog-type">${escapeHtml(category)}</span>
-      <h2>${escapeHtml(title)}</h2>
-      <p>${escapeHtml(content ? content.replace(/<[^>]*>/g, '').slice(0, 80) + '...' : 'وثيقة رسمية قابلة للتحقق والطباعة المعتمدة.')}</p>
-      <div class="catalog-footer">
-        <strong>${price} <small>دج / نسخة</small></strong>
-        <button class="buy-button" data-buy="${id}" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button>
-      </div>
-    </div>
-  `;
+  const preview = document.createElement('div');
+  preview.className = 'catalog-preview uploaded-preview';
+  const previewIcon = document.createElement('i');
+  previewIcon.dataset.lucide = 'database';
+  const previewLabel = document.createElement('span');
+  previewLabel.textContent = 'MEDAD / SUPABASE';
+  preview.append(previewIcon, previewLabel);
+  const body = document.createElement('div');
+  body.className = 'catalog-card-body';
+  const type = document.createElement('span');
+  type.className = 'catalog-type';
+  type.textContent = category;
+  const heading = document.createElement('h2');
+  heading.textContent = title;
+  const description = document.createElement('p');
+  description.textContent = content ? `${content.replace(/<[^>]*>/g, '').slice(0, 80)}...` : 'وثيقة رسمية قابلة للتحقق والطباعة المعتمدة.';
+  const footer = document.createElement('div');
+  footer.className = 'catalog-footer';
+  const priceLabel = document.createElement('strong');
+  priceLabel.append(document.createTextNode(`${Number(price)} `));
+  const priceUnit = document.createElement('small');
+  priceUnit.textContent = 'دج / نسخة';
+  priceLabel.append(priceUnit);
+  const buyButton = document.createElement('button');
+  buyButton.className = 'buy-button';
+  buyButton.dataset.buy = id;
+  buyButton.type = 'button';
+  buyButton.append(document.createTextNode('شراء الوثيقة '));
+  const buyIcon = document.createElement('i');
+  buyIcon.dataset.lucide = 'arrow-left';
+  buyButton.append(buyIcon);
+  footer.append(priceLabel, buyButton);
+  body.append(type, heading, description, footer);
+  card.append(preview, body);
   $('.document-catalog')?.appendChild(card);
-  card.querySelector('[data-buy]')?.addEventListener('click', () => openPurchase(id));
+  buyButton.addEventListener('click', () => openPurchase(id));
   window.lucide?.createIcons();
 }
 
 async function loadCatalogFromSupabase() {
-  if (!supabase) return;
+  const catalog = $('.document-catalog');
+  if (!catalog) return;
+  catalog.textContent = 'جارٍ تحميل الوثائق...';
+  if (!supabase) {
+    catalog.textContent = 'تعذر الاتصال بمكتبة الوثائق الآن.';
+    return;
+  }
   try {
     const { data: docs, error } = await supabase.from('documents').select('id, title, content, price_per_copy, is_published').eq('is_published', true);
-    if (error || !docs) return;
+    if (error || !docs) {
+      catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
+      return;
+    }
+    catalog.replaceChildren();
+    if (!docs.length) {
+      catalog.textContent = 'لا توجد وثائق متاحة حاليًا.';
+      return;
+    }
     docs.forEach((doc) => {
       addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.content);
     });
-  } catch (_) {}
-}
-
-let currentUserEmail = '';
-
-function updateAdminAccess(user) {
-  currentUserEmail = user?.email || '';
-  const emailLocalPart = user?.email?.split('@')[0]?.toLowerCase();
-  isAdmin = user?.user_metadata?.role === 'admin' || emailLocalPart === ADMIN_EMAIL_LOCAL_PART;
-  renderAdminAccess();
+  } catch (_) {
+    catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
+  }
 }
 
 function renderAccount(user) {
@@ -137,7 +152,7 @@ function renderAccount(user) {
   if ($('#profile-name')) $('#profile-name').textContent = displayName;
   if ($('#profile-avatar')) $('#profile-avatar').textContent = initial;
   if ($('#profile-provider')) $('#profile-provider').textContent = provider === 'google' ? 'Google' : provider === 'github' ? 'GitHub' : 'البريد الإلكتروني';
-  if ($('#profile-role')) $('#profile-role').textContent = isAdmin ? 'مسؤول' : 'مشتري';
+  if ($('#profile-role')) $('#profile-role').textContent = 'مشتري';
 }
 
 function openProfileDropdown() {
@@ -160,27 +175,69 @@ function closeProfileDropdown() {
 
 async function loadAccountHistory() {
   const list = $('#account-orders');
+  const licensesList = $('#account-licenses');
   const summary = $('#account-summary');
-  if (!list) return;
-  list.innerHTML = '<div class="account-empty">جارٍ تحميل الطلبات...</div>';
-  const { data: orders, error: ordersError } = await supabase.from('orders').select('id,calculated_price,currency,copies_count,status,created_at,documents(title)').order('created_at', { ascending: false });
-  if (ordersError) {
-    list.innerHTML = '<div class="account-empty">تعذر تحميل الطلبات الآن.</div>';
-    if (summary) summary.textContent = ordersError.message;
-    return;
+  if (!list || !licensesList) return;
+  list.textContent = 'جارٍ تحميل الطلبات...';
+  licensesList.textContent = 'جارٍ تحميل التراخيص...';
+  try {
+    const [orderResult, licenseResult] = await Promise.all([
+      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,documents(title)').order('created_at', { ascending: false }),
+      supabase.from('print_licenses').select('id,license_key,document_id,remaining_prints,order_id,documents(title)').order('created_at', { ascending: false })
+    ]);
+    if (orderResult.error) {
+      list.textContent = 'تعذر تحميل الطلبات الآن. تحقق من اتصالك ثم أعد المحاولة.';
+      if (summary) summary.textContent = 'تعذر تحميل البيانات';
+    } else {
+      const orders = orderResult.data ?? [];
+      if (summary) summary.textContent = `${orders.length} طلبات محفوظة في حسابك`;
+      if (!orders.length) list.textContent = 'لا توجد طلبات بعد.';
+      else list.replaceChildren(...orders.map((order) => {
+        const status = order.status === 'paid' ? 'مدفوع' : order.status === 'failed' ? 'فشل' : 'قيد الانتظار';
+        const article = document.createElement('article');
+        article.className = 'order-item';
+        const top = document.createElement('div');
+        top.className = 'order-item-top';
+        const title = document.createElement('span');
+        title.textContent = order.documents?.title ?? 'وثيقة';
+        const state = document.createElement('span');
+        state.textContent = status;
+        top.append(title, state);
+        const details = document.createElement('small');
+        details.textContent = `${order.copies_count} نسخة / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`;
+        article.append(top, details);
+        return article;
+      }));
+    }
+    if (licenseResult.error) {
+      licensesList.textContent = 'تعذر تحميل التراخيص الآن. تحقق من اتصالك ثم أعد المحاولة.';
+      return;
+    }
+    const licenses = licenseResult.data ?? [];
+    if (!licenses.length) {
+      licensesList.textContent = 'لا توجد تراخيص بعد.';
+      return;
+    }
+    licensesList.replaceChildren(...licenses.map((license) => {
+      const article = document.createElement('article');
+      article.className = 'order-item';
+      const top = document.createElement('div');
+      top.className = 'order-item-top';
+      const title = document.createElement('span');
+      title.textContent = license.documents?.title ?? 'وثيقة';
+      const remaining = document.createElement('span');
+      remaining.textContent = `${license.remaining_prints} نسخة متبقية`;
+      const key = document.createElement('small');
+      key.textContent = license.license_key;
+      top.append(title, remaining);
+      article.append(top, key);
+      return article;
+    }));
+  } catch (_) {
+    list.textContent = 'تعذر تحميل الطلبات الآن. تحقق من اتصالك ثم أعد المحاولة.';
+    if (summary) summary.textContent = 'تعذر تحميل البيانات';
+    licensesList.textContent = 'تعذر تحميل التراخيص الآن. تحقق من اتصالك ثم أعد المحاولة.';
   }
-  const { data: licenses } = await supabase.from('print_licenses').select('order_id,license_key,prints_remaining,total_prints_allowed,documents(title)');
-  const licensesByOrder = new Map((licenses ?? []).map((license) => [license.order_id, license]));
-  if (summary) summary.textContent = `${orders.length} طلبات محفوظة في حسابك`;
-  if (!orders.length) {
-    list.innerHTML = '<div class="account-empty">لا توجد طلبات بعد.</div>';
-    return;
-  }
-  list.innerHTML = orders.map((order) => {
-    const license = licensesByOrder.get(order.id);
-    const status = order.status === 'paid' ? 'مدفوع' : order.status === 'pending' ? 'قيد الانتظار' : order.status === 'failed' ? 'فشل' : 'ملغى';
-    return `<article class="order-item"><div class="order-item-top"><span>${escapeHtml(order.documents?.title ?? 'وثيقة')}</span><span>${status}</span></div><small>${order.copies_count} نسخة / ${order.calculated_price} ${escapeHtml(order.currency)} / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}</small>${license ? `<div class="license-line"><span>${escapeHtml(license.license_key)}</span><span>${license.prints_remaining}/${license.total_prints_allowed}</span></div>` : ''}</article>`;
-  }).join('');
 }
 
 function syncConsentState() {
@@ -196,8 +253,29 @@ function setNotice(message, type = '') {
   const notice = $('#notice');
   if (!notice) return;
   notice.className = `notice ${type}`;
-  notice.innerHTML = `<i data-lucide="${type === 'success' ? 'check-circle-2' : type === 'error' ? 'alert-circle' : 'info'}"></i><span>${message}</span>`;
+  const icon = document.createElement('i');
+  icon.dataset.lucide = type === 'success' ? 'check-circle-2' : type === 'error' ? 'alert-circle' : 'info';
+  const text = document.createElement('span');
+  text.textContent = message;
+  notice.replaceChildren(icon, text);
   window.lucide?.createIcons();
+}
+
+function sanitizeDocumentHtml(value) {
+  const source = new DOMParser().parseFromString(String(value ?? ''), 'text/html');
+  const allowedTags = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'DIV', 'SPAN', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD']);
+  const cleanNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent ?? '');
+    if (node.nodeType !== Node.ELEMENT_NODE) return document.createDocumentFragment();
+    if (!allowedTags.has(node.tagName)) return document.createTextNode(node.textContent ?? '');
+    const clean = document.createElement(node.tagName.toLowerCase());
+    if (node.hasAttribute('dir') && ['ltr', 'rtl', 'auto'].includes(node.getAttribute('dir'))) clean.setAttribute('dir', node.getAttribute('dir'));
+    for (const child of node.childNodes) clean.append(cleanNode(child));
+    return clean;
+  };
+  const output = document.createDocumentFragment();
+  for (const child of source.body.childNodes) output.append(cleanNode(child));
+  return output;
 }
 
 let isToolbarInitialized = false;
@@ -351,7 +429,7 @@ function setupInteractiveDocumentStudio(license) {
     $('#btn-reset-doc')?.addEventListener('click', () => {
       if (!activeLicense) return;
       if ($('#document-title')) $('#document-title').textContent = activeLicense.document.title;
-      if ($('#document-content')) $('#document-content').innerHTML = activeLicense.document.content;
+      if ($('#document-content')) $('#document-content').replaceChildren(sanitizeDocumentHtml(activeLicense.document.content));
       const paper = $('#document-paper');
       if (paper) paper.className = 'document-paper';
       setNotice('تمت إعادة تعيين محتوى الوثيقة والتنسيقات إلى الوضع الأصلي.', 'info');
@@ -361,19 +439,19 @@ function setupInteractiveDocumentStudio(license) {
 
 function renderLicense(license) {
   activeLicense = license;
-  const remaining = Math.max(0, Number(license.prints_remaining));
-  const total = Number(license.total_prints_allowed);
+  const remaining = Math.max(0, Number(license.remaining_prints));
+  const total = Math.max(remaining, Number(license.total_prints ?? remaining));
   const used = total - remaining;
   
-  if ($('#doc-id')) $('#doc-id').textContent = license.access_key.slice(-6);
+  if ($('#doc-id')) $('#doc-id').textContent = license.license_key.slice(-6);
   if ($('#document-title')) $('#document-title').textContent = license.document.title;
-  if ($('#doc-category')) $('#doc-category').textContent = license.document.category || 'شهادة توثيق رقمية';
-  if ($('#document-content')) $('#document-content').innerHTML = license.document.content;
+  if ($('#doc-category')) $('#doc-category').textContent = license.document.category || 'وثيقة مرخصة';
+  if ($('#document-content')) $('#document-content').replaceChildren(sanitizeDocumentHtml(license.document.content));
 
   setupInteractiveDocumentStudio(license);
 
   supabase?.auth.getUser().then(({ data: { user } }) => {
-    const watermark = user?.email ? `مِداد / ${user.email} / ${license.access_key.slice(-8)}` : `مِداد / ${license.access_key.slice(-8)}`;
+    const watermark = user?.email ? `مِداد / ${user.email} / ${license.license_key.slice(-8)}` : `مِداد / ${license.license_key.slice(-8)}`;
     document.querySelectorAll('.paper-watermark').forEach((element) => {
       element.textContent = watermark;
       element.dataset.watermark = watermark;
@@ -384,8 +462,8 @@ function renderLicense(license) {
   if ($('#prints-remaining')) $('#prints-remaining').textContent = remaining;
   if ($('#prints-used')) $('#prints-used').textContent = used;
   if ($('#total-prints')) $('#total-prints').textContent = total;
-  if ($('#progress-bar')) $('#progress-bar').style.width = `${Math.min(100, (used / total) * 100)}%`;
-  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${Math.max(0, (remaining / total) * 360)}deg, #dbeafe 0deg)`;
+  if ($('#progress-bar')) $('#progress-bar').style.width = `${total ? Math.min(100, (used / total) * 100) : 0}%`;
+  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #dbeafe 0deg)`;
   
   const stateEl = $('#license-state');
   if (stateEl) {
@@ -396,60 +474,55 @@ function renderLicense(license) {
   const printBtn = $('#print-button');
   if (printBtn) printBtn.disabled = remaining <= 0;
   
-  // إلغاء قفل الصفحة نهائياً
-  const sceneLock = $('#scene-lock');
-  if (sceneLock) sceneLock.classList.add('is-hidden');
-  
   setNotice(`تم تفعيل المستند بنجاح. يمكنك الآن التعديل المباشر والتخصيص الكامل للوثيقة قبل الطباعة.`, 'success');
   window.lucide?.createIcons();
 }
 
 async function getLicense(key) {
   const cleanKey = key.trim().toUpperCase();
-  if (cleanKey === 'LIC-TEST-2026-MEDAD-KEY-001' || cleanKey.startsWith('LIC-TEST') || cleanKey.startsWith('LIC-DEMO')) {
-    return {
-      license_key: cleanKey,
-      access_key: cleanKey,
-      document_id: '61be6e55-3ed6-4839-b8ed-d73ef4923ccd',
-      prints_remaining: 10,
-      total_prints_allowed: 10,
-      document: {
-        title: 'شهادة التوثيق والترخيص المهني التفاعلي',
-        category: 'شهادة رقمية معتمدة',
-        content: 'تشهد منصة مِداد للوثائق الرقمية الآمنة بأن حامل هذا المستند يحوز ترخيصاً رسمياً تفاعلياً بميزات المعاينة ثلاثية الأبعاد والتعديل المباشر والطباعة المعتمدة. كل نسخة محمية برقم تسلسلي مخصص وعلامة مائية رقمية غير قابلة للتزوير.'
-      }
-    };
-  }
-
   if (!supabase) throw new Error('يجب إعداد Supabase أولًا.');
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('سجّل الدخول قبل تفعيل الترخيص.');
-  const { data, error } = await supabase.from('print_licenses').select('license_key,document_id,prints_remaining,total_prints_allowed,documents(title,content)').eq('license_key', cleanKey).single();
-  if (error || !data) {
-    if (cleanKey.startsWith('LIC-')) {
-      return {
-        license_key: cleanKey,
-        access_key: cleanKey,
-        document_id: '61be6e55-3ed6-4839-b8ed-d73ef4923ccd',
-        prints_remaining: 5,
-        total_prints_allowed: 5,
-        document: {
-          title: 'وثيقة رقمية تفاعلية مرخصة',
-          category: 'مستند موثّق',
-          content: 'هذه وثيقة رقمية تفاعلية قابلة للتعديل والطباعة، مرتبطة بمفتاح ترخيص فريد ومحمية بنظام مِداد الآمن للتحقق.'
-        }
-      };
-    }
-    return null;
+  let user;
+  try {
+    ({ data: { user } } = await supabase.auth.getUser());
+  } catch (_) {
+    throw new Error('تعذر الاتصال بخدمة التراخيص. تحقق من اتصالك ثم حاول مرة أخرى.');
   }
-  return { ...data, access_key: data.license_key, document: data.documents };
+  if (!user) throw new Error('سجّل الدخول قبل تفعيل الترخيص.');
+  let licenseResult;
+  try {
+    licenseResult = await supabase.from('print_licenses').select('license_key,document_id,remaining_prints,order_id,documents(title,content)').eq('license_key', cleanKey).maybeSingle();
+  } catch (_) {
+    throw new Error('تعذر التحقق من الترخيص الآن. تحقق من اتصالك ثم حاول مرة أخرى.');
+  }
+  const { data, error } = licenseResult;
+  if (error) throw new Error('تعذر التحقق من الترخيص الآن. حاول مرة أخرى.');
+  if (!data) return null;
+  let orderResult;
+  try {
+    orderResult = await supabase.from('orders').select('copies_count').eq('id', data.order_id).maybeSingle();
+  } catch (_) {
+    throw new Error('تعذر تحميل بيانات الطلب المرتبط بالترخيص.');
+  }
+  const { data: order, error: orderError } = orderResult;
+  if (orderError || !order) throw new Error('تعذر تحميل بيانات الطلب المرتبط بالترخيص.');
+  return {
+    ...data,
+    total_prints: Number(order.copies_count),
+    document: { ...(data.documents ?? {}), category: 'وثيقة مرخصة' }
+  };
 }
 
 async function processPrint(licenseKey, documentId) {
   if (!supabase) throw new Error('يجب إعداد Supabase أولًا.');
-  const { data, error } = await supabase.functions.invoke('decrement-print-counter', { body: { license_key: licenseKey, document_id: documentId } });
-  if (error || !data?.success) throw new Error('تعذر إجراء الطباعة: الترخيص غير صالح أو انتهت النسخ.');
-  return { ...activeLicense, prints_remaining: data.remaining_prints };
+  let result;
+  try {
+    result = await supabase.functions.invoke('decrement-print-counter', { body: { license_key: licenseKey, document_id: documentId } });
+  } catch (_) {
+    throw new Error('تعذر الاتصال بخدمة الطباعة. لم تتم الطباعة؛ حاول مرة أخرى.');
+  }
+  const { data, error } = result;
+  if (error || data?.success !== true || !Number.isFinite(Number(data.remaining_prints))) throw new Error('تعذر إجراء الطباعة. تحقق من اتصالك أو من عدد النسخ المتبقية.');
+  return { ...activeLicense, remaining_prints: Number(data.remaining_prints) };
 }
 
 $('#activation-form')?.addEventListener('submit', async (event) => {
@@ -460,7 +533,7 @@ $('#activation-form')?.addEventListener('submit', async (event) => {
     return;
   }
   const key = $('#license-key')?.value.trim().toUpperCase();
-  if (!key || !/^LIC-[A-Z0-9-]{20,64}$/.test(key)) {
+  if (!key || !key.startsWith('LIC-') || key.length < 12) {
     setNotice('صيغة المفتاح غير صحيحة. استخدم مفتاح LIC الصحيح.', 'error');
     return;
   }
@@ -488,80 +561,147 @@ $('#activation-form')?.addEventListener('submit', async (event) => {
 $('#privacy-consent')?.addEventListener('change', syncConsentState);
 
 $('#print-button')?.addEventListener('click', async () => {
-  if (!activeLicense || activeLicense.prints_remaining <= 0 || !supabase) return;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    setNotice('سجّل الدخول قبل الطباعة.', 'error');
-    return;
-  }
+  if (!activeLicense || activeLicense.remaining_prints <= 0 || !supabase) return;
   const button = $('#print-button');
+  if (button?.disabled) return;
   if (button) button.disabled = true;
   try {
-    activeLicense = await processPrint(activeLicense.access_key, activeLicense.document_id);
+    let authResult;
+    try {
+      authResult = await supabase.auth.getUser();
+    } catch (_) {
+      openAuthDialog('login');
+      setNotice('سجّل الدخول بالحساب المرتبط بالترخيص قبل الطباعة.', 'error');
+      return;
+    }
+    const user = authResult.data?.user;
+    if (!user) {
+      openAuthDialog('login');
+      setNotice('سجّل الدخول بالحساب المرتبط بالترخيص قبل الطباعة.', 'error');
+      return;
+    }
+    if (authResult.error) throw new Error('تعذر التحقق من جلسة الدخول. حاول مرة أخرى.');
+    activeLicense = await processPrint(activeLicense.license_key, activeLicense.document_id);
     renderLicense(activeLicense);
+    if (activeLicense.remaining_prints < 0) throw new Error('لا توجد نسخ متبقية للطباعة.');
     document.body.classList.add('authorized-print');
     setNotice('تم حجز نسخة الطباعة. افتح نافذة الطباعة لإكمال العملية.', 'success');
     window.print();
   } catch (error) {
-    setNotice(error.message, 'error');
-    if (button) button.disabled = false;
+    setNotice(error.message || 'تعذر تنفيذ الطباعة الآن. حاول مرة أخرى.', 'error');
   } finally {
+    if (button) button.disabled = activeLicense?.remaining_prints <= 0;
     window.setTimeout(() => document.body.classList.remove('authorized-print'), 500);
   }
 });
 
+class CheckoutError extends Error {}
+
 async function startCheckout(documentId, copiesCount) {
-  if (!supabase) throw new Error('يجب إعداد Supabase وربط بوابة الدفع أولًا.');
-  if (!documentId) throw new Error('هذه الوثيقة غير مربوطة بسجل Supabase بعد.');
+  if (!supabase) throw new CheckoutError('خدمة الدفع غير متاحة الآن. حاول مرة أخرى لاحقًا.');
+  if (!documentId) throw new CheckoutError('هذه الوثيقة غير مربوطة بسجل الدفع.');
+  if (!Number.isInteger(copiesCount) || copiesCount < 1 || copiesCount > 100) throw new CheckoutError('اختر عددًا صحيحًا من النسخ بين 1 و100.');
   try {
-    const { data, error } = await supabase.functions.invoke('create-checkout', { body: { document_id: documentId, copies_count: copiesCount } });
-    if (!error && data?.checkout_url) {
-      window.location.assign(data.checkout_url);
-      return;
+    const { data, error } = await supabase.functions.invoke('create-checkout-', { body: { document_id: documentId, copies: copiesCount } });
+    if (error) {
+      const status = error.context?.status;
+      let code = '';
+      try {
+        const response = error.context instanceof Response ? error.context.clone() : null;
+        code = (await response?.json())?.error ?? '';
+      } catch (_) {}
+      const messages = {
+        '401': 'انتهت جلسة الدخول. سجّل الدخول ثم أعد المحاولة.',
+        '400': 'بيانات الطلب أو سعر الوثيقة غير صالح. راجع الاختيار أو تواصل مع الدعم.',
+        '404': 'هذه الوثيقة لم تعد متاحة للشراء.',
+        '500': 'تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.',
+        '502': 'بوابة الدفع غير متاحة حاليًا. حاول مرة أخرى لاحقًا.',
+        bad_input: 'بيانات الطلب غير صحيحة. راجع الوثيقة وعدد النسخ.',
+        document_not_found: 'هذه الوثيقة لم تعد متاحة للشراء.',
+        bad_price: 'تعذر اعتماد سعر هذه الوثيقة. تواصل مع الدعم.',
+        order_failed: 'تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.',
+        payment_provider_error: 'بوابة الدفع غير متاحة حاليًا. حاول مرة أخرى لاحقًا.'
+      };
+      throw new CheckoutError(messages[code] ?? messages[String(status)] ?? 'تعذر بدء الدفع. تحقق من اتصالك ثم حاول مرة أخرى.');
     }
-  } catch (_) { }
-  showManualPaymentDialog(documentId, copiesCount);
+    if (!data?.checkout_url || !data?.order_id) throw new CheckoutError('استجابة الدفع غير مكتملة. حاول مرة أخرى لاحقًا.');
+    const checkoutUrl = new URL(data.checkout_url);
+    if (checkoutUrl.protocol !== 'https:') throw new CheckoutError('تعذر التحقق من أمان رابط الدفع. لم يتم تحويلك.');
+    window.location.href = checkoutUrl.href;
+  } catch (error) {
+    if (error instanceof CheckoutError) throw error;
+    throw new CheckoutError('تعذر الاتصال بخدمة الدفع. تحقق من اتصالك ثم حاول مرة أخرى.');
+  }
 }
 
-function showManualPaymentDialog(documentId, copiesCount) {
-  const item = Object.values(documentCatalog).find(d => d.document_id === documentId) || documentCatalog[selectedDocument];
-  const total = (item?.price ?? 0) * copiesCount;
-  const dialog = $('#manual-payment-dialog');
-  if (!dialog) {
-    const el = document.createElement('dialog');
-    el.id = 'manual-payment-dialog';
-    el.className = 'payment-dialog';
-    el.innerHTML = `
-      <button class="dialog-close" id="manual-payment-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button>
-      <div class="payment-badge"><i data-lucide="banknote"></i> دفع يدوي</div>
-      <div class="section-kicker">خطوات الدفع</div>
-      <h2>أكمل عملية الدفع</h2>
-      <div class="manual-payment-details">
-        <p class="dialog-subtitle">حوِّل المبلغ عبر CCP أو Baridimob ثم أرسل لنا إيصال الدفع.</p>
-        <div class="payment-info-box">
-          <div class="payment-info-row"><span>المبلغ الإجمالي</span><strong id="manual-total">${total} دج</strong></div>
-          <div class="payment-info-row"><span>رقم CCP</span><strong>0021345678901</strong></div>
-          <div class="payment-info-row"><span>المفتاح الولائي</span><strong>85</strong></div>
-          <div class="payment-info-row"><span>اسم المستفيد</span><strong>مِداد للوثائق الآمنة</strong></div>
-        </div>
-        <p class="payment-step"><i data-lucide="send"></i> بعد الدفع، أرسل الإيصال عبر البريد: <strong>pay@midad.dz</strong></p>
-        <p class="payment-step"><i data-lucide="key-round"></i> سيصلك مفتاح الترخيص خلال 24 ساعة.</p>
-      </div>
-      <button class="primary-button full-button" id="manual-payment-done" type="button">تم الدفع، سأرسل الإيصال <i data-lucide="check"></i></button>
-    `;
-    document.body.appendChild(el);
-    el.querySelector('#manual-payment-close')?.addEventListener('click', () => el.close());
-    el.querySelector('#manual-payment-done')?.addEventListener('click', () => {
-      el.close();
-      setNotice('شكرًا! سيصلك مفتاح الترخيص بعد مراجعة إيصالك خلال 24 ساعة.', 'success');
-    });
-    el.addEventListener('click', (ev) => { if (ev.target === el) el.close(); });
-    el.showModal();
-  } else {
-    if ($('#manual-total')) $('#manual-total').textContent = `${total} دج`;
-    dialog.showModal();
+async function confirmCheckoutReturn(returnStatus) {
+  if (checkoutReturnStarted || !['success', 'failed'].includes(returnStatus)) return;
+  checkoutReturnStarted = true;
+  if (returnStatus === 'failed') {
+    const failedUrl = new URL(window.location.href);
+    failedUrl.searchParams.delete('status');
+    window.history.replaceState({}, '', failedUrl);
+    pendingReturnStatus = null;
+    setNotice('لم تكتمل عملية الدفع. يمكنك اختيار الوثيقة والمحاولة مجددًا.', 'error');
+    return;
   }
-  window.lucide?.createIcons();
+  let user;
+  let authError;
+  try {
+    ({ data: { user }, error: authError } = await supabase.auth.getUser());
+  } catch (_) {
+    checkoutReturnStarted = false;
+    setNotice('تعذر الاتصال بخدمة الحسابات. أعد المحاولة لتأكيد الطلب.', 'error');
+    return;
+  }
+    if (!user) {
+    checkoutReturnStarted = false;
+    setNotice('سجّل الدخول بالحساب الذي بدأ الطلب لتأكيد الدفع والترخيص.', 'error');
+    openAuthDialog('login');
+    return;
+  }
+    if (authError) {
+      checkoutReturnStarted = false;
+      setNotice('تعذر استعادة جلسة الدخول. سجّل الدخول ثم أعد المحاولة لتأكيد الطلب.', 'error');
+      return;
+    }
+  const url = new URL(window.location.href);
+  url.searchParams.delete('status');
+  window.history.replaceState({}, '', url);
+  pendingReturnStatus = null;
+
+  setNotice('بانتظار تأكيد الدفع من بوابة الدفع...', 'info');
+  const deadline = Date.now() + 30000;
+  try {
+    while (Date.now() < deadline) {
+      const { data: order, error } = await supabase.from('orders').select('id,status,copies_count,document_id,calculated_price,documents(title)').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) {
+        setNotice('تعذر تأكيد الطلب بسبب مشكلة اتصال. افتح حسابك لاحقًا لمراجعة حالته.', 'error');
+        return;
+      }
+      if (order?.status === 'failed') {
+        setNotice('حالة الطلب: فشل الدفع. يمكنك بدء طلب جديد.', 'error');
+        return;
+      }
+      if (order?.status === 'paid') {
+        const { data: license, error: licenseError } = await supabase.from('print_licenses').select('license_key,document_id,remaining_prints,order_id,documents(title,content)').eq('order_id', order.id).maybeSingle();
+        if (licenseError) {
+          setNotice('تم تأكيد الدفع، لكن تعذر تحميل الترخيص الآن. افتح حسابك بعد قليل.', 'error');
+          return;
+        }
+        if (license) {
+          renderLicense({ ...license, total_prints: Number(order.copies_count), document: { ...(license.documents ?? {}), category: 'وثيقة مرخصة' } });
+          setNotice(`تم الدفع وتفعيل الترخيص. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة.`, 'success');
+          return;
+        }
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 3000));
+    }
+  } catch (_) {
+    setNotice('تعذر تأكيد الطلب بسبب مشكلة اتصال. افتح حسابك لاحقًا لمراجعة حالته.', 'error');
+    return;
+  }
+  setNotice('تم استلام الدفع، وسيظهر الترخيص قريبًا. حدّث الصفحة بعد دقيقة إذا لم يظهر.', 'info');
 }
 
 function setAuthFeedback(message, type = '') {
@@ -569,6 +709,19 @@ function setAuthFeedback(message, type = '') {
   if (!feedback) return;
   feedback.textContent = message;
   feedback.className = `auth-feedback ${type}`;
+}
+
+function authErrorMessage(error) {
+  const code = error?.code ?? error?.status;
+  const messages = {
+    invalid_credentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+    email_not_confirmed: 'أكد بريدك الإلكتروني قبل تسجيل الدخول.',
+    user_already_exists: 'هذا البريد مسجل بالفعل. سجّل الدخول بدلًا من إنشاء حساب جديد.',
+    weak_password: 'اختر كلمة مرور أقوى من ستة أحرف.',
+    over_request_rate_limit: 'تم تجاوز عدد المحاولات. انتظر قليلًا ثم أعد المحاولة.',
+    '429': 'تم تجاوز عدد المحاولات. انتظر قليلًا ثم أعد المحاولة.'
+  };
+  return messages[code] ?? 'تعذر إتمام طلب الحساب. تحقق من البيانات والاتصال ثم حاول مرة أخرى.';
 }
 
 function openAuthDialog(mode = 'signup') {
@@ -589,210 +742,99 @@ function openAuthDialog(mode = 'signup') {
   window.lucide?.createIcons();
 }
 
-async function continuePendingCheckout() {
-  if (checkoutResumeStarted || !pendingCheckout) return;
-  const checkout = pendingCheckout;
-  checkoutResumeStarted = true;
-  pendingCheckout = null;
-  sessionStorage.removeItem('pending-checkout');
+function continuePendingPurchase() {
+  if (!pendingPurchase) return;
+  const purchase = pendingPurchase;
+  pendingPurchase = null;
+  sessionStorage.removeItem(PENDING_PURCHASE_KEY);
   $('#auth-dialog')?.close();
-  if (checkout) {
-    try {
-      await startCheckout(checkout.documentId, checkout.copiesCount);
-    } catch (error) {
-      setNotice(error.message, 'error');
-    }
-  }
+  selectedQuantity = Number.isInteger(purchase.copiesCount) ? Math.min(100, Math.max(1, purchase.copiesCount)) : 1;
+  openPurchaseDialog(purchase.documentId);
 }
 
-function openPurchase(documentId) {
+function openPurchaseDialog(documentId) {
+  const item = documentCatalog[documentId];
+  if (!item) {
+    setNotice('هذه الوثيقة غير متاحة حاليًا. حدّث الصفحة وحاول مجددًا.', 'error');
+    return;
+  }
   selectedDocument = documentId;
   selectedQuantity = 1;
-  const item = documentCatalog[documentId];
   if ($('#purchase-title')) $('#purchase-title').textContent = item.title;
   if ($('#quantity-value')) $('#quantity-value').textContent = selectedQuantity;
-  if ($('#purchase-total')) $('#purchase-total').textContent = item.price;
+  setPurchaseFeedback('');
+  updatePurchaseTotal();
   $('#purchase-dialog')?.showModal();
+}
+
+async function openPurchase(documentId) {
+  if (!supabase) {
+    setNotice('تعذر الاتصال بخدمة الحسابات. حاول مرة أخرى لاحقًا.', 'error');
+    return;
+  }
+  if (!documentCatalog[documentId] || purchaseAuthCheckPending) return;
+  purchaseAuthCheckPending = true;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      savePendingPurchase({ documentId });
+      openAuthDialog('login');
+      return;
+    }
+    openPurchaseDialog(documentId);
+  } catch (_) {
+    setNotice('تعذر التحقق من تسجيل الدخول. حاول مرة أخرى.', 'error');
+  } finally {
+    purchaseAuthCheckPending = false;
+  }
 }
 
 function updatePurchaseTotal() {
   const item = documentCatalog[selectedDocument];
+  if (!item) return;
   if ($('#quantity-value')) $('#quantity-value').textContent = selectedQuantity;
   if ($('#purchase-total')) $('#purchase-total').textContent = item.price * selectedQuantity;
 }
 
-function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[character]));
+function setPurchaseFeedback(message, type = '') {
+  const feedback = $('#purchase-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.className = `purchase-feedback ${type}`;
 }
 
-function addUploadedDocumentToCatalog(documentId, documentData, price) {
-  documentCatalog[documentId] = { title: documentData.title, price, category: 'وثيقة مضافة', document: documentData };
-  const card = document.createElement('article');
-  card.className = 'catalog-card uploaded-catalog-card';
-  card.dataset.document = documentId;
-  card.innerHTML = `<div class="catalog-preview uploaded-preview"><i data-lucide="file-up"></i><span>ملف المسؤول</span></div><div class="catalog-card-body"><span class="catalog-type">وثيقة مضافة</span><h2>${escapeHtml(documentData.title)}</h2><p>وثيقة خاصة متاحة للشراء بالطباعة المرخصة والسعر الذي حددته.</p><div class="catalog-footer"><strong>${price} <small>دج / نسخة</small></strong><button class="buy-button" data-buy="${documentId}" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div>`;
-  $('.document-catalog')?.appendChild(card);
-  card.querySelector('[data-buy]')?.addEventListener('click', () => openPurchase(documentId));
-  window.lucide?.createIcons();
-}
-
-function readUploadedDocument(file) {
-  const title = file.name.replace(/\.[^.]+$/, '');
-  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-    return file.arrayBuffer().then(async (buffer) => {
-      await pdfReady;
-      if (!pdfjsLib) throw new Error('تعذر قراءة PDF دون اتصال بالإنترنت. استخدم ملفًا نصيًا أو صورة.');
-      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 3 });
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      return { title, imageUrl: canvas.toDataURL('image/png', 1), content: `<p>الصفحة الأولى من الوثيقة الأصلية بجودة عالية.</p>` };
-    });
-  }
-  if (file.type.startsWith('image/')) {
-    const imageUrl = URL.createObjectURL(file);
-    return { title, imageUrl, content: `<p>تم تحميل الوثيقة الأصلية بجودة عالية.</p>` };
-  }
-  return file.text().then((text) => ({ title, content: `<p>${text.slice(0, 1800).replace(/[&<>]/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[character]))}</p>` }));
-}
-
-const _uploadBtn = $('#upload-document-button');
-const _uploadInput = $('#document-upload');
-if (_uploadBtn) _uploadBtn.addEventListener('click', () => _uploadInput?.click());
-if (_uploadInput) _uploadInput.addEventListener('change', async (event) => {
-  const [file] = event.target.files;
-  if (!file) return;
-  try {
-    const documentData = await readUploadedDocument(file);
-    pendingUpload = documentData;
-    if ($('#upload-file-name')) $('#upload-file-name').textContent = file.name;
-    if ($('#uploaded-title')) $('#uploaded-title').value = documentData.title;
-    if ($('#uploaded-price')) $('#uploaded-price').value = '120';
-    $('#upload-details-dialog')?.showModal();
-  } catch (error) {
-    setNotice('تعذر قراءة الملف. جرّب ملف TXT أو HTML أو صورة.', 'error');
-  } finally {
-    event.target.value = '';
-  }
-});
-
-$('#upload-details-close')?.addEventListener('click', () => { pendingUpload = null; $('#upload-details-dialog')?.close(); });
-$('#save-uploaded-document')?.addEventListener('click', () => {
-  if (!pendingUpload) return;
-  const title = $('#uploaded-title')?.value.trim();
-  const price = Number($('#uploaded-price')?.value);
-  if (!title || !Number.isFinite(price) || price < 0) {
-    setNotice('أدخل اسم الوثيقة وسعرًا صحيحًا قبل الحفظ.', 'error');
-    return;
-  }
-  pendingUpload.title = title;
-  const documentId = `uploaded-${Date.now()}`;
-  addUploadedDocumentToCatalog(documentId, pendingUpload, price);
-  $('#upload-details-dialog')?.close();
-  setNotice('تم حفظ بيانات الملف محليًا. اربط Storage ودالة إدارة الوثائق لحفظه على الخادم.', 'success');
-  pendingUpload = null;
-});
-
-// Admin Add Document Dialog Event Listeners
-$('#admin-add-doc-trigger')?.addEventListener('click', () => {
-  if (!isAdmin) {
-    setNotice('يجب تسجيل الدخول ببريد المسؤول لاستخدام لوحة إضافة الوثائق.', 'error');
-    return;
-  }
-  $('#admin-add-doc-dialog')?.showModal();
-});
-
-$('#admin-add-doc-close')?.addEventListener('click', () => {
-  $('#admin-add-doc-dialog')?.close();
-});
-
-$('#admin-add-doc-form')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!isAdmin) {
-    setNotice('صلاحيات غير كافية لإضافة وثيقة جديدة.', 'error');
-    return;
-  }
-
-  const title = $('#admin-doc-title')?.value.trim();
-  const category = $('#admin-doc-category')?.value.trim();
-  const price = Number($('#admin-doc-price')?.value);
-  const content = $('#admin-doc-content')?.value.trim();
-
-  if (!title || !Number.isFinite(price) || price < 0 || !content) {
-    setNotice('يرجى ملء جميع الحقول المطلوبة بشكل صحيح.', 'error');
-    return;
-  }
-
-  const submitBtn = $('#admin-doc-submit');
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = 'جارٍ الحفظ في Supabase... <i data-lucide="loader"></i>';
-  }
-
-  try {
-    let insertedId = `doc-${Date.now()}`;
-    if (supabase) {
-      const { data, error } = await supabase.from('documents').insert({
-        title,
-        content,
-        price_per_copy: price,
-        is_published: true
-      }).select().single();
-
-      if (error) {
-        console.warn('Supabase Insert Warning:', error);
-      } else if (data) {
-        insertedId = data.id;
-      }
-    }
-
-    addDocumentCardToCatalog(insertedId, title, price, category, content);
-    $('#admin-add-doc-dialog')?.close();
-    $('#admin-add-doc-form')?.reset();
-    setNotice(`تمت إضافة الوثيقة «${title}» بنجاح في Supabase وإتاحتها في المكتبة!`, 'success');
-  } catch (err) {
-    setNotice(`حدث خطأ أثناء حفظ الوثيقة: ${err.message}`, 'error');
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = 'حفظ وإضافة إلى Supabase <i data-lucide="database"></i>';
-    }
-    window.lucide?.createIcons();
-  }
-});
-
-document.querySelectorAll('[data-buy]').forEach((button) => button.addEventListener('click', () => openPurchase(button.dataset.buy)));
 $('#quantity-minus')?.addEventListener('click', () => { selectedQuantity = Math.max(1, selectedQuantity - 1); updatePurchaseTotal(); });
-$('#quantity-plus')?.addEventListener('click', () => { selectedQuantity = Math.min(99, selectedQuantity + 1); updatePurchaseTotal(); });
+$('#quantity-plus')?.addEventListener('click', () => { selectedQuantity = Math.min(100, selectedQuantity + 1); updatePurchaseTotal(); });
 $('#purchase-close')?.addEventListener('click', () => $('#purchase-dialog')?.close());
-$('#payment-close')?.addEventListener('click', () => $('#payment-dialog')?.close());
-$('#continue-payment')?.addEventListener('click', () => {
+$('#start-provider-checkout')?.addEventListener('click', async (event) => {
   const item = documentCatalog[selectedDocument];
-  if ($('#payment-summary')) $('#payment-summary').textContent = `${item.title} / ${selectedQuantity} ${selectedQuantity === 1 ? 'نسخة' : 'نسخ'} / ${item.price * selectedQuantity} دج`;
-  $('#purchase-dialog')?.close();
-  $('#payment-dialog')?.showModal();
-});
-$('#start-provider-checkout')?.addEventListener('click', () => {
-  const item = documentCatalog[selectedDocument];
+  const button = event.currentTarget;
+  if (!item || button?.disabled) return;
   if (!supabase) {
-    setNotice('يجب إعداد Supabase أولًا.', 'error');
+    setPurchaseFeedback('خدمة الدفع غير متاحة الآن. حاول مرة أخرى لاحقًا.', 'error');
     return;
   }
-  supabase.auth.getUser().then(({ data: { user } }) => {
+  button.disabled = true;
+  const buttonLabel = button.querySelector('span');
+  if (buttonLabel) buttonLabel.textContent = 'جارٍ تجهيز الدفع...';
+  setPurchaseFeedback('جارٍ الاتصال ببوابة الدفع...');
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
     if (!user) {
-      savePendingCheckout({ documentId: item.document_id, copiesCount: selectedQuantity });
-      $('#payment-dialog')?.close();
+      savePendingPurchase({ documentId: item.document_id, copiesCount: selectedQuantity });
+      $('#purchase-dialog')?.close();
       openAuthDialog('login');
       return;
     }
-    $('#payment-dialog')?.close();
-    startCheckout(item.document_id, selectedQuantity).catch((error) => {
-      showManualPaymentDialog(item.document_id, selectedQuantity);
-    });
-  }).catch((error) => setNotice(error.message, 'error'));
+    if (error) throw new CheckoutError('تعذر التحقق من جلسة الدخول. سجّل الدخول مجددًا ثم حاول.');
+    await startCheckout(item.document_id, selectedQuantity);
+  } catch (error) {
+    const message = error instanceof CheckoutError ? error.message : 'تعذر الاتصال بخدمة الدفع. تحقق من اتصالك ثم حاول مرة أخرى.';
+    setPurchaseFeedback(message, 'error');
+  } finally {
+    button.disabled = false;
+    if (buttonLabel) buttonLabel.textContent = 'المتابعة إلى الدفع';
+  }
 });
 
 $('#auth-close')?.addEventListener('click', () => $('#auth-dialog')?.close());
@@ -801,8 +843,12 @@ $('#forgot-password')?.addEventListener('click', async () => {
   if (!supabase) return setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
   const email = $('#auth-email')?.value.trim();
   if (!email) return setAuthFeedback('أدخل بريدك الإلكتروني أولًا.', 'error');
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
-  setAuthFeedback(error ? error.message : 'تم إرسال رابط استرجاع كلمة المرور إلى بريدك.', error ? 'error' : 'success');
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+    setAuthFeedback(error ? 'تعذر إرسال رابط الاستعادة. تحقق من البريد وحاول مرة أخرى.' : 'تم إرسال رابط استرجاع كلمة المرور إلى بريدك.', error ? 'error' : 'success');
+  } catch (_) {
+    setAuthFeedback('تعذر الاتصال بخدمة الحسابات. حاول مرة أخرى.', 'error');
+  }
 });
 $('#auth-form')?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -832,9 +878,9 @@ $('#auth-form')?.addEventListener('submit', async (event) => {
       openAuthDialog('login');
       return;
     }
-    await continuePendingCheckout();
+    continuePendingPurchase();
   } catch (error) {
-    setAuthFeedback(error.message || 'تعذر إتمام العملية.', 'error');
+    setAuthFeedback(authErrorMessage(error), 'error');
   } finally {
     if (submit) submit.disabled = false;
   }
@@ -845,11 +891,15 @@ async function startOAuth(provider) {
     setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
     return;
   }
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo: window.location.origin + window.location.pathname }
-  });
-  if (error) setAuthFeedback(error.message, 'error');
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin + window.location.pathname }
+    });
+    if (error) setAuthFeedback('تعذر بدء تسجيل الدخول عبر هذا المزود. حاول مرة أخرى.', 'error');
+  } catch (_) {
+    setAuthFeedback('تعذر الاتصال بمزود تسجيل الدخول. حاول مرة أخرى.', 'error');
+  }
 }
 
 $('#google-auth')?.addEventListener('click', () => startOAuth('google'));
@@ -857,10 +907,11 @@ $('#github-auth')?.addEventListener('click', () => startOAuth('github'));
 $('#account-logout')?.addEventListener('click', async () => {
   if (!supabase) return;
   const { error } = await supabase.auth.signOut();
-  if (error) setNotice(error.message, 'error');
+  if (error) setNotice('تعذر تسجيل الخروج الآن. حاول مرة أخرى.', 'error');
   else {
     renderAccount(null);
     activeLicense = null;
+    if ($('#print-button')) $('#print-button').disabled = true;
     setNotice('تم تسجيل الخروج.', 'success');
   }
 });
@@ -868,85 +919,57 @@ $('#account-open')?.addEventListener('click', async () => {
   if (!supabase) return;
   closeProfileDropdown();
   $('#account-dialog')?.showModal();
-  await loadAccountHistory();
+  try {
+    await loadAccountHistory();
+  } catch (_) {
+    if ($('#account-orders')) $('#account-orders').textContent = 'تعذر تحميل الطلبات. تحقق من اتصالك ثم أعد المحاولة.';
+  }
 });
 $('#account-close')?.addEventListener('click', () => $('#account-dialog')?.close());
-document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); }));
-
 $('#login-trigger')?.addEventListener('click', () => openAuthDialog('login'));
-
-$('#profile-trigger')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const dropdown = $('#profile-dropdown');
-  if (dropdown?.classList.contains('is-open')) closeProfileDropdown();
+$('#profile-trigger')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  if ($('#profile-dropdown')?.classList.contains('is-open')) closeProfileDropdown();
   else openProfileDropdown();
 });
-
-document.addEventListener('click', (e) => {
-  if (!$('#user-profile')?.contains(e.target)) closeProfileDropdown();
+document.addEventListener('click', (event) => {
+  if (!$('#user-profile')?.contains(event.target)) closeProfileDropdown();
 });
+document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {
+  if (event.target === dialog) dialog.close();
+}));
 
-document.addEventListener('keydown', (event) => {
-  if ((event.ctrlKey && ['p', 's'].includes(event.key.toLowerCase())) || event.key === 'F12' || event.key === 'PrintScreen') {
-    event.preventDefault();
-    if (event.key === 'PrintScreen') {
-      document.body.classList.add('capture-blocked');
-      window.setTimeout(() => document.body.classList.remove('capture-blocked'), 1800);
-    }
-    setNotice('هذا الإجراء محمي داخل جلسة مِداد.', 'error');
+loadCatalogFromSupabase();
+syncConsentState();
+restorePendingPurchase();
+supabase?.auth.getSession().then(({ data: { session }, error }) => {
+  if (error) {
+    renderAccount(null);
+    setNotice('تعذر استعادة جلسة الدخول. سجّل الدخول للمتابعة.', 'error');
+    return;
+  }
+  renderAccount(session?.user ?? null);
+  if (session && pendingPurchase) continuePendingPurchase();
+  else if (pendingReturnStatus) {
+    if (session) confirmCheckoutReturn(pendingReturnStatus);
+    else openAuthDialog('login');
+  }
+}).catch(() => setNotice('تعذر الاتصال بخدمة الحسابات. حاول تحديث الصفحة.', 'error'));
+
+supabase?.auth.onAuthStateChange((event, session) => {
+  renderAccount(session?.user ?? null);
+  if (event === 'PASSWORD_RECOVERY') openAuthDialog('reset');
+  if (event === 'SIGNED_IN') {
+    if (pendingPurchase) continuePendingPurchase();
+    else if (pendingReturnStatus) confirmCheckoutReturn(pendingReturnStatus);
   }
 });
 
-function setDocumentObscured(isObscured) {
-  document.body.classList.toggle('is-obscured', isObscured);
-}
-
-window.addEventListener('blur', () => setDocumentObscured(true));
-window.addEventListener('focus', () => setDocumentObscured(false));
-
-function create3DScene() {
-  return;
-}
-
-// إلغاء القفل وفتح الاستوديو تلقائياً فور التحميل
-document.addEventListener('DOMContentLoaded', () => {
-  const defaultLicense = {
-    license_key: 'LIC-FREE-STUDIO-PREVIEW',
-    access_key: 'LIC-FREE-STUDIO-PREVIEW',
-    document_id: '61be6e55-3ed6-4839-b8ed-d73ef4923ccd',
-    prints_remaining: 10,
-    total_prints_allowed: 10,
-    document: {
-      title: 'استوديو معاينة وتعديل المستندات',
-      category: 'محرر مِداد المباشر',
-      content: 'مرحباً بك في المحرر المباشر! يمكنك الآن تعديل النصوص، اختيار الخطوط، تغيير الألوان والتنسيقات مباشرة بحرية كاملة.'
-    }
-  };
-  renderLicense(defaultLicense);
+$('#privacy-policy-link')?.addEventListener('click', () => $('#privacy-dialog')?.showModal());
+$('#privacy-dialog-close')?.addEventListener('click', () => $('#privacy-dialog')?.close());
+document.addEventListener('click', (event) => {
+  if (event.target === $('#privacy-dialog')) $('#privacy-dialog')?.close();
 });
 
 window.lucide?.createIcons();
-renderAdminAccess();
-loadCatalogFromSupabase();
-syncConsentState();
-restorePendingCheckout();
 
-supabase?.auth.getSession().then(({ data: { session } }) => {
-  updateAdminAccess(session?.user ?? null);
-  renderAccount(session?.user ?? null);
-  if (session && pendingCheckout) continuePendingCheckout();
-}).catch(() => null);
-
-supabase?.auth.onAuthStateChange((event, session) => {
-  updateAdminAccess(session?.user ?? null);
-  renderAccount(session?.user ?? null);
-  if (event === 'PASSWORD_RECOVERY') openAuthDialog('reset');
-  if (event === 'SIGNED_IN' && pendingCheckout) continuePendingCheckout();
-});
-
-const privacyDialog = $('#privacy-dialog');
-$('#privacy-policy-link')?.addEventListener('click', () => privacyDialog?.showModal());
-$('#privacy-dialog-close')?.addEventListener('click', () => privacyDialog?.close());
-document.addEventListener('click', (event) => {
-  if (event.target === privacyDialog) privacyDialog?.close();
-});

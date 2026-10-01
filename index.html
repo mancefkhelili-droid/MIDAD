@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
-  <div class="privacy-shield" aria-hidden="true"></div>
   <header class="topbar">
     <a class="brand" href="#top" aria-label="مِداد - الرئيسية">
       <span class="brand-mark"><i data-lucide="scan-line"></i></span>
@@ -66,18 +65,8 @@
   <main id="top">
     <section class="catalog-section" id="workspace" aria-labelledby="catalog-title">
       <div class="catalog-intro"><div><div class="eyebrow"><span class="eyebrow-line"></span> مكتبة الوثائق</div><h1 id="catalog-title">اختر وثيقتك،<br /><em>واطبع بثقة.</em></h1></div><p>اشترِ عدد النسخ الذي تحتاجه، ثم يصلك مفتاح آمن لفتح وثيقتك ومعاينتها ثلاثية الأبعاد.</p></div>
-      <div class="catalog-actions">
-        <span>اختر وثيقتك واشترِ العدد الذي تحتاجه.</span>
-        <button class="admin-upload-button is-hidden" id="admin-add-doc-trigger" type="button">
-          <i data-lucide="plus-circle"></i>
-          <span>إضافة وثيقة جديدة إلى Supabase (المسؤول)</span>
-        </button>
-      </div>
-      <div class="document-catalog">
-        <article class="catalog-card" data-document="certificate"><div class="catalog-preview mint-preview"><i data-lucide="award"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">شهادة مهنية</span><h2>شهادة المشاركة المهنية</h2><p>وثيقة رسمية قابلة للتحقق مع حماية ضد المسح والنسخ.</p><div class="catalog-footer"><strong>120 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="certificate" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
-        <article class="catalog-card" data-document="attendance"><div class="catalog-preview blue-preview"><i data-lucide="calendar-check-2"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">سجل حضور</span><h2>وثيقة إثبات الحضور</h2><p>سجل موثق للفعاليات والدورات مع عدد نسخ قابل للتخصيص.</p><div class="catalog-footer"><strong>80 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="attendance" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
-        <article class="catalog-card" data-document="license"><div class="catalog-preview yellow-preview"><i data-lucide="file-badge-2"></i><span>MEDAD / VERIFIED</span></div><div class="catalog-card-body"><span class="catalog-type">ترخيص استخدام</span><h2>ترخيص المحتوى الرقمي</h2><p>ترخيص واضح للاستخدام والطباعة، مرتبط بمفتاح فردي.</p><div class="catalog-footer"><strong>200 <small>دج / نسخة</small></strong><button class="buy-button" data-buy="license" type="button">شراء الوثيقة <i data-lucide="arrow-left"></i></button></div></div></article>
-      </div>
+      <div class="catalog-actions"><span>اختر وثيقتك واشترِ العدد الذي تحتاجه.</span></div>
+      <div class="document-catalog" aria-live="polite">جارٍ تحميل الوثائق...</div>
     </section>
 
     <section class="activation-section" id="activation-section" aria-labelledby="activation-title">
@@ -196,13 +185,6 @@
             </div>
           </div>
 
-          <!-- قفل المعاينة قبل التفعيل -->
-          <div class="scene-lock" id="scene-lock">
-            <i data-lucide="file-lock-2"></i>
-            <strong>المستند مقفل</strong>
-            <span>أدخل مفتاح الترخيص لفتح القالب واستخدام محرر التعديل المباشر</span>
-          </div>
-
           <!-- الورقة التفاعلية الرئيسية -->
           <div class="document-paper" id="document-paper">
             <div class="paper-watermark">مِداد</div>
@@ -265,28 +247,9 @@
     </section>
   </main>
 
-  <dialog class="purchase-dialog" id="purchase-dialog"><button class="dialog-close" id="purchase-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">شراء وثيقة</div><h2 id="purchase-title">اختر عدد النسخ</h2><p class="dialog-subtitle">كل نسخة لها رقم ضمن ترخيصك ويمكن طباعتها مرة واحدة.</p><div class="quantity-control"><button type="button" id="quantity-minus" aria-label="تقليل العدد"><i data-lucide="minus"></i></button><strong id="quantity-value">1</strong><button type="button" id="quantity-plus" aria-label="زيادة العدد"><i data-lucide="plus"></i></button></div><div class="purchase-total"><span>الإجمالي</span><strong><span id="purchase-total">120</span> دج</strong></div><button class="primary-button full-button" id="continue-payment" type="button">المتابعة إلى الدفع <i data-lucide="arrow-left"></i></button></dialog>
-  <dialog class="payment-dialog" id="payment-dialog"><button class="dialog-close" id="payment-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="payment-badge"><i data-lucide="lock-keyhole"></i> دفع آمن</div><div class="section-kicker">إتمام الطلب</div><h2>افتح وثيقتك الآن</h2><p class="dialog-subtitle" id="payment-summary">سيتم تحويلك إلى بوابة الدفع الرسمية.</p><button class="primary-button full-button" id="start-provider-checkout" type="button">الانتقال إلى بوابة الدفع <i data-lucide="arrow-left"></i></button></dialog>
+  <dialog class="purchase-dialog" id="purchase-dialog"><button class="dialog-close" id="purchase-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">شراء وثيقة</div><h2 id="purchase-title">اختر عدد النسخ</h2><p class="dialog-subtitle">كل نسخة لها رقم ضمن ترخيصك ويمكن طباعتها مرة واحدة.</p><div class="quantity-control"><button type="button" id="quantity-minus" aria-label="تقليل العدد"><i data-lucide="minus"></i></button><strong id="quantity-value">1</strong><button type="button" id="quantity-plus" aria-label="زيادة العدد"><i data-lucide="plus"></i></button></div><div class="purchase-total"><span>الإجمالي</span><strong><span id="purchase-total">120</span> دج</strong></div><p class="purchase-feedback" id="purchase-feedback" role="status" aria-live="polite"></p><button class="primary-button full-button" id="start-provider-checkout" type="button"><span>المتابعة إلى الدفع</span><i data-lucide="arrow-left"></i></button></dialog>
   <dialog class="auth-dialog" id="auth-dialog"><button class="dialog-close" id="auth-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="user-round-plus"></i></div><div class="section-kicker">حساب المشتري</div><h2 id="auth-title">أنشئ حسابك لإتمام الشراء</h2><p class="dialog-subtitle" id="auth-subtitle">احفظ تراخيصك وعمليات الطباعة في حساب آمن.</p><form id="auth-form"><label>البريد الإلكتروني<input id="auth-email" type="email" autocomplete="email" required placeholder="name@example.com" /></label><label>كلمة المرور<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="6 أحرف على الأقل" /></label><button class="primary-button full-button" id="auth-submit" type="submit">إنشاء حساب <i data-lucide="arrow-left"></i></button></form><button class="forgot-password" id="forgot-password" type="button">نسيت كلمة المرور؟</button><div class="oauth-divider"><span>أو تابع باستخدام</span></div><div class="oauth-buttons"><button class="oauth-button" id="google-auth" type="button"><strong class="google-mark">G</strong><span>Google</span></button><button class="oauth-button" id="github-auth" type="button"><strong class="github-mark">GH</strong><span>GitHub</span></button></div><p class="auth-feedback" id="auth-feedback" role="status" aria-live="polite"></p><button class="auth-switch" id="auth-switch" type="button">لديك حساب؟ تسجيل الدخول</button></dialog>
-  <dialog class="account-dialog" id="account-dialog"><button class="dialog-close" id="account-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">الملف الشخصي</div><div class="profile-header"><div class="profile-avatar" id="profile-avatar">م</div><div><h2 id="profile-name">حسابي</h2><p class="profile-email" id="profile-email">-</p></div></div><div class="profile-details"><div><span>طريقة الدخول</span><strong id="profile-provider">-</strong></div><div><span>نوع الحساب</span><strong id="profile-role">مشتري</strong></div></div><div class="account-section-title"><h3>طلباتي وتراخيصي</h3><p class="dialog-subtitle" id="account-summary">جارٍ تحميل البيانات...</p></div><div class="account-orders" id="account-orders"></div></dialog>
-  <dialog class="upload-details-dialog" id="upload-details-dialog"><button class="dialog-close" id="upload-details-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="file-pen-line"></i></div><div class="section-kicker">تفاصيل الوثيقة</div><h2>سمِّ الوثيقة وحدد سعرها</h2><p class="dialog-subtitle" id="upload-file-name">سيتم حفظها في مكتبة الوثائق.</p><label>اسم الوثيقة<input id="uploaded-title" placeholder="مثال: شهادة إتمام الدورة" /></label><label>سعر النسخة بالدينار<input id="uploaded-price" type="number" min="0" step="1" placeholder="120" /></label><button class="primary-button full-button" id="save-uploaded-document" type="button">حفظ وإضافة إلى المكتبة <i data-lucide="check"></i></button></dialog>
-
-  <!-- نافذة إضافة وثيقة جديدة إلى Supabase لـ Admin -->
-  <dialog class="admin-login-dialog" id="admin-add-doc-dialog">
-    <button class="dialog-close" id="admin-add-doc-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button>
-    <div class="dialog-icon"><i data-lucide="database-zap"></i></div>
-    <div class="section-kicker">لوحة المسؤول</div>
-    <h2>إضافة وثيقة جديدة إلى Supabase</h2>
-    <p class="dialog-subtitle">ستُحفظ الوثيقة مباشرة في قاعدة البيانات وتظهر فوراً في مكتبة الوثائق للمستعملين.</p>
-    <form id="admin-add-doc-form">
-      <label>عنوان الوثيقة<input id="admin-doc-title" required placeholder="مثال: دبلوم تخرج مهني معتمد" /></label>
-      <label>التصنيف / النوع<input id="admin-doc-category" required placeholder="مثال: دبلوم معتمد" /></label>
-      <label>سعر النسخة بالدينار (DZD)<input id="admin-doc-price" type="number" min="0" step="1" required placeholder="150" /></label>
-      <label>محتوى الوثيقة الرسمي<textarea id="admin-doc-content" rows="4" style="width:100%;margin-top:6px;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font:14px 'Tajawal',sans-serif;" required placeholder="أدخل محتوى أو نص الوثيقة الرسمية هنا..."></textarea></label>
-      <button class="primary-button full-button" id="admin-doc-submit" type="submit">حفظ وإضافة إلى Supabase <i data-lucide="database"></i></button>
-    </form>
-  </dialog>
-
+  <dialog class="account-dialog" id="account-dialog"><button class="dialog-close" id="account-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">الملف الشخصي</div><div class="profile-header"><div class="profile-avatar" id="profile-avatar">م</div><div><h2 id="profile-name">حسابي</h2><p class="profile-email" id="profile-email">-</p></div></div><div class="profile-details"><div><span>طريقة الدخول</span><strong id="profile-provider">-</strong></div><div><span>نوع الحساب</span><strong id="profile-role">مشتري</strong></div></div><div class="account-section-title"><h3>طلباتي</h3><p class="dialog-subtitle" id="account-summary">جارٍ تحميل البيانات...</p></div><div class="account-orders" id="account-orders"></div><div class="account-section-title"><h3>تراخيص الطباعة</h3></div><div class="account-orders" id="account-licenses"></div></dialog>
   <footer><div class="brand mini"><span class="brand-mark"><i data-lucide="scan-line"></i></span><strong>مِداد</strong></div><span>© 2026 منصة مِداد للوثائق الآمنة</span><span class="footer-secure"><i data-lucide="shield"></i> خصوصيتك أولاً</span></footer>
 
   <dialog class="privacy-dialog" id="privacy-dialog">
@@ -302,7 +265,6 @@
   <!-- مكتبة Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
-  <script type="module" src="app.js?v=17"></script>
+  <script type="module" src="app.js?v=18"></script>
 </body>
 </html>
-

@@ -1,155 +1,101 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// verify_jwt is OFF for this function on purpose: Chargily cannot send a Supabase JWT.
+// Authentication = HMAC signature of the raw body, signed with the Chargily secret key.
 
-async function verifySignature(rawBody: string, signature: string | null, secret: string) {
-  if (!signature) return false;
+const enc = new TextEncoder();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const reply = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+async function hmacHex(secret: string, body: string) {
   const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['verify']
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
   );
-  const bytes = Uint8Array.from(signature.match(/.{1,2}/g) ?? [], (part) => parseInt(part, 16));
-  return crypto.subtle.verify('HMAC', key, bytes, new TextEncoder().encode(rawBody));
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(body));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function safeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  if (req.method !== 'POST') return reply({ error: 'method_not_allowed' }, 405);
 
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  // Verify against the RAW body, before any JSON.parse
+  const raw = await req.text();
+  const signature = (req.headers.get('signature') ?? req.headers.get('x-chargily-signature') ?? '').toLowerCase();
 
-  const rawBody = await req.text();
-  const webhookSecret = Deno.env.get('PAYMENT_WEBHOOK_SECRET') || Deno.env.get('PAYMENT_PROVIDER_SECRET');
-  const signatureHeader = req.headers.get('signature') || req.headers.get('x-chargily-signature');
+  const secrets = [
+    Deno.env.get('CHARGILY_SECRET_KEY'),
+    Deno.env.get('PAYMENT_WEBHOOK_SECRET'),
+    Deno.env.get('PAYMENT_PROVIDER_SECRET'),
+  ].filter((s): s is string => !!s);
 
-  if (!webhookSecret || !await verifySignature(rawBody, signatureHeader, webhookSecret)) {
-    return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  let body;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const event = body.event;
-  const checkoutData = body.data;
-
-  if (event !== 'checkout.paid' || !checkoutData) {
-    return new Response(JSON.stringify({ received: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const order_id = checkoutData.metadata?.order_id;
-  const provider_ref = checkoutData.id;
-  const paid_amount = checkoutData.amount;
-  const currency = checkoutData.currency?.toLowerCase();
-
-  if (!order_id || !provider_ref) {
-    return new Response(JSON.stringify({ received: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-
-  const { data: order } = await supabase.from('orders').select('*').eq('id', order_id).single();
-  if (!order || order.calculated_price !== Number(paid_amount) || order.currency?.toLowerCase() !== currency) {
-    return new Response(JSON.stringify({ error: 'Order mismatch' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const { data: existingPayment } = await supabase
-    .from('payments')
-    .select('order_id,amount,currency')
-    .eq('provider_reference', provider_ref)
-    .maybeSingle();
-
-  if (existingPayment && (existingPayment.order_id !== order_id || existingPayment.amount !== Number(paid_amount) || existingPayment.currency?.toLowerCase() !== currency)) {
-    return new Response(JSON.stringify({ error: 'Payment mismatch' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!existingPayment) {
-    const { error: paymentError } = await supabase.from('payments').insert({
-      order_id,
-      provider_reference: provider_ref,
-      amount: paid_amount,
-      currency,
-      status: 'completed',
-      raw_event: body
-    });
-
-    if (paymentError) {
-      const { data: retryPayment } = await supabase.from('payments').select('order_id').eq('provider_reference', provider_ref).maybeSingle();
-      if (retryPayment?.order_id !== order_id) {
-        return new Response(JSON.stringify({ error: 'Payment could not be recorded' }), {
-          status: 409,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+  let valid = false;
+  if (signature && secrets.length) {
+    for (const s of secrets) {
+      if (safeEqual(signature, await hmacHex(s, raw))) { valid = true; break; }
     }
   }
+  if (!valid) return reply({ error: 'invalid_signature' }, 401);
 
-  const { error: orderError } = await supabase
-    .from('orders')
-    .update({ status: 'paid', paid_at: order.paid_at ?? new Date().toISOString() })
-    .eq('id', order_id)
-    .in('status', ['pending', 'paid']);
+  let event: any;
+  try { event = JSON.parse(raw); } catch { return reply({ error: 'invalid_json' }, 400); }
 
-  if (orderError) {
-    return new Response(JSON.stringify({ error: 'Order could not be updated' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  // Chargily puts the event name in `type` (not `event`)
+  const type: string = event?.type ?? '';
+  const checkout = event?.data;
+  const orderId = checkout?.metadata?.order_id;
+  if (!checkout || typeof orderId !== 'string' || !UUID_RE.test(orderId)) {
+    return reply({ received: true });          // not one of our checkouts
   }
 
-  const internalSecret = Deno.env.get('INTERNAL_FUNCTION_SECRET');
-  if (!internalSecret) {
-    return new Response(JSON.stringify({ error: 'Internal function is not configured' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  const admin = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+
+  if (['checkout.failed', 'checkout.canceled', 'checkout.expired'].includes(type)) {
+    await admin.from('orders').update({ status: 'failed' }).eq('id', orderId).eq('status', 'pending');
+    return reply({ received: true });
   }
 
-  const issueResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/issue-license`, {
-    method: 'POST',
-    headers: { 'x-internal-secret': internalSecret, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order_id })
+  if (type !== 'checkout.paid') return reply({ received: true });
+
+  if (String(checkout.currency ?? '').toLowerCase() !== 'dzd' || !checkout.id) {
+    console.error('unexpected checkout payload', orderId);
+    return reply({ received: true });
+  }
+
+  // One atomic transaction in the database: validate amount, record payment,
+  // mark order paid, issue the license. Safe to receive the same webhook twice.
+  const { data: result, error } = await admin.rpc('finalize_paid_order', {
+    p_order_id: orderId,
+    p_provider_ref: String(checkout.id),
+    p_amount: Number(checkout.amount),
+    p_event: event,
   });
 
-  if (!issueResponse.ok) {
-    return new Response(JSON.stringify({ error: 'License issuance failed' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  if (error) {
+    console.error('finalize_paid_order failed', error);
+    return reply({ error: 'temporary_failure' }, 500);   // let Chargily retry
+  }
+  if (result !== 'ok') {
+    // permanent problem (mismatch / unknown order): retrying will not help
+    console.error('payment rejected', result, orderId, checkout.id);
+    await admin.from('audit_logs').insert({
+      action: 'PAYMENT_REJECTED',
+      details: { reason: result, order_id: orderId, provider_reference: checkout.id },
     });
   }
-
-  return new Response(JSON.stringify({ received: true }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  return reply({ received: true });
 });
