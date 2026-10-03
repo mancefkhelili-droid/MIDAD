@@ -208,6 +208,17 @@ function closeProfileDropdown() {
   if (trigger) trigger.setAttribute('aria-expanded', 'false');
 }
 
+async function fetchDocumentTitles(ids) {
+  const unique = [...new Set((ids ?? []).filter(Boolean))];
+  if (!unique.length || !supabase) return {};
+  try {
+    const { data } = await supabase.from('documents').select('id,title').in('id', unique);
+    return Object.fromEntries((data ?? []).map((doc) => [doc.id, doc.title]));
+  } catch (_) {
+    return {};
+  }
+}
+
 async function loadAccountHistory() {
   const list = $('#account-orders');
   const licensesList = $('#account-licenses');
@@ -217,9 +228,10 @@ async function loadAccountHistory() {
   licensesList.textContent = 'جارٍ تحميل التراخيص...';
   try {
     const [orderResult, licenseResult] = await Promise.all([
-      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,documents(title)').order('created_at', { ascending: false }),
-      supabase.from('print_licenses').select('id,license_key,document_id,remaining_prints,order_id,documents(title)').order('created_at', { ascending: false })
+      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,document_id').order('created_at', { ascending: false }),
+      supabase.from('print_licenses').select('id,license_key,document_id,remaining_prints,order_id').order('created_at', { ascending: false })
     ]);
+    const titles = await fetchDocumentTitles([...(orderResult.data ?? []).map((o) => o.document_id), ...(licenseResult.data ?? []).map((l) => l.document_id)]);
     if (orderResult.error) {
       list.textContent = 'تعذر تحميل الطلبات الآن. تحقق من اتصالك ثم أعد المحاولة.';
       if (summary) summary.textContent = 'تعذر تحميل البيانات';
@@ -234,7 +246,7 @@ async function loadAccountHistory() {
         const top = document.createElement('div');
         top.className = 'order-item-top';
         const title = document.createElement('span');
-        title.textContent = order.documents?.title ?? 'وثيقة';
+        title.textContent = titles[order.document_id] ?? 'وثيقة غير متاحة';
         const state = document.createElement('span');
         state.textContent = status;
         top.append(title, state);
@@ -259,7 +271,7 @@ async function loadAccountHistory() {
       const top = document.createElement('div');
       top.className = 'order-item-top';
       const title = document.createElement('span');
-      title.textContent = license.documents?.title ?? 'وثيقة';
+      title.textContent = titles[license.document_id] ?? 'وثيقة غير متاحة';
       const remaining = document.createElement('span');
       remaining.textContent = `${license.remaining_prints} نسخة متبقية`;
       const key = document.createElement('small');
@@ -315,11 +327,12 @@ document.addEventListener('focusin', (e) => {
 function setupInteractiveDocumentStudio(license) {
   const editBadge = $('#edit-mode-badge');
   const toolbar = $('#editor-toolbar');
-  if (editBadge) editBadge.classList.remove('is-hidden');
-  if (toolbar) toolbar.classList.remove('is-hidden');
+  const lockedPdf = Boolean(license?.document?.storage_path);
+  if (editBadge) editBadge.classList.toggle('is-hidden', lockedPdf);
+  if (toolbar) toolbar.classList.toggle('is-hidden', lockedPdf);
 
   document.querySelectorAll('.editable-field').forEach((el) => {
-    el.setAttribute('contenteditable', 'true');
+    el.setAttribute('contenteditable', lockedPdf ? 'false' : 'true');
     el.setAttribute('spellcheck', 'false');
   });
 
@@ -364,6 +377,10 @@ function setupInteractiveDocumentStudio(license) {
     $('#btn-italic')?.addEventListener('click', () => document.execCommand('italic', false, null));
     $('#btn-underline')?.addEventListener('click', () => document.execCommand('underline', false, null));
     $('#btn-strikethrough')?.addEventListener('click', () => document.execCommand('strikeThrough', false, null));
+    $('#btn-ul')?.addEventListener('click', () => document.execCommand('insertUnorderedList', false, null));
+    $('#btn-ol')?.addEventListener('click', () => document.execCommand('insertOrderedList', false, null));
+    $('#btn-undo')?.addEventListener('click', () => document.execCommand('undo', false, null));
+    $('#btn-redo')?.addEventListener('click', () => document.execCommand('redo', false, null));
 
     // 3. Colors & Highlighting
     $('#toolbar-text-color')?.addEventListener('input', (e) => {
@@ -465,6 +482,7 @@ function setupInteractiveDocumentStudio(license) {
 
 function renderLicense(license) {
   activeLicense = license;
+  $('#security')?.classList.remove('is-hidden');
   const remaining = Math.max(0, Number(license.remaining_prints));
   const total = Math.max(remaining, Number(license.total_prints ?? remaining));
   const used = total - remaining;
@@ -480,17 +498,10 @@ function renderLicense(license) {
   }
 
   setupInteractiveDocumentStudio(license);
-  if (contentEl && license.document.storage_path) renderPdfInto(contentEl, license.document.storage_path);
+  const isPdf = Boolean(license.document.storage_path);
+  applyWatermark(license);
+  if (contentEl && isPdf) renderPdfInto(contentEl, license.document.storage_path, license);
   else if (contentEl) contentEl.setAttribute('contenteditable', 'true');
-
-  supabase?.auth.getUser().then(({ data: { user } }) => {
-    const watermark = user?.email ? `مِداد / ${user.email} / ${license.license_key.slice(-8)}` : `مِداد / ${license.license_key.slice(-8)}`;
-    document.querySelectorAll('.paper-watermark').forEach((element) => {
-      element.textContent = watermark;
-      element.dataset.watermark = watermark;
-    });
-    document.body.dataset.printWatermark = watermark;
-  });
 
   if ($('#prints-remaining')) $('#prints-remaining').textContent = remaining;
   if ($('#prints-used')) $('#prints-used').textContent = used;
@@ -501,13 +512,22 @@ function renderLicense(license) {
   const stateEl = $('#license-state');
   if (stateEl) {
     stateEl.classList.add('active');
-    stateEl.innerHTML = '<span class="state-dot"></span> مفعل الآن';
+    stateEl.innerHTML = license.isAdmin ? '<span class="state-dot"></span> وضع الأدمن' : '<span class="state-dot"></span> مفعل الآن';
+  }
+  if (license.isAdmin) {
+    if ($('#prints-remaining')) $('#prints-remaining').textContent = '∞';
+    if ($('#prints-used')) $('#prints-used').textContent = '0';
+    if ($('#total-prints')) $('#total-prints').textContent = '∞';
+    if ($('#progress-bar')) $('#progress-bar').style.width = '0%';
+    if ($('#counter-ring')) $('#counter-ring').style.background = 'conic-gradient(#2563eb 360deg, #dbeafe 0deg)';
+    if ($('#license-key')) $('#license-key').value = '';
   }
   
   const printBtn = $('#print-button');
-  if (printBtn) printBtn.disabled = remaining <= 0;
+  if (printBtn) printBtn.disabled = !license.isAdmin && remaining <= 0;
   
-  setNotice(`تم تفعيل المستند بنجاح. يمكنك الآن التعديل المباشر والتخصيص الكامل للوثيقة قبل الطباعة.`, 'success');
+  if (license.isAdmin) setNotice('وضع الأدمن: تعرض وتطبع أي وثيقة بدون دفع وبدون خصم نسخ، وتبقى العلامة المائية باسمك.', 'info');
+  else setNotice(isPdf ? 'تم تفعيل المستند. ملفات PDF تُعرض كما هي ولا تُعدَّل، وتُطبع دائمًا مع علامة مائية باسم بريدك.' : 'تم تفعيل المستند بنجاح. يمكنك تعديله قبل الطباعة، لكنه يُطبع دائمًا مع علامة مائية باسم بريدك ولا يُطبع بدونها.', 'success');
   window.lucide?.createIcons();
 }
 
@@ -536,13 +556,131 @@ async function getLicense(key) {
     document_id: data.document_id,
     remaining_prints: Number(data.remaining_prints),
     order_id: data.order_id,
+    email: data.email ?? '',
     total_prints: Number(data.copies_count ?? data.remaining_prints),
     document: { title: data.title, content: data.content ?? '', storage_path: data.storage_path ?? null, category: 'وثيقة مرخصة' }
   };
 }
 
+// ---------- Watermark: the buyer's e-mail (from the server) is burned into every page ----------
+let watermarkText = '';
+
+async function applyWatermark(license) {
+  let email = license?.email || '';
+  if (!email && supabase) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      email = session?.user?.email || '';
+    } catch (_) { /* fall back to the key only */ }
+  }
+  const tail = String(license?.license_key ?? '').slice(-6);
+  watermarkText = `${email || 'MEDAD'} · ${tail}`;
+  document.querySelectorAll('.paper-watermark').forEach((element) => {
+    element.textContent = watermarkText;
+    element.dataset.watermark = watermarkText;
+  });
+  document.body.dataset.printWatermark = watermarkText;
+  if (!license?.document?.storage_path) ensureWatermarkOverlay();
+  return watermarkText;
+}
+
+function ensureWatermarkOverlay() {
+  const paper = $('#document-paper');
+  if (!paper || !watermarkText) return null;
+  paper.querySelector('#watermark-tiles')?.remove();
+  const NS = 'http://www.w3.org/2000/svg';
+  const overlay = document.createElement('div');
+  overlay.id = 'watermark-tiles';
+  overlay.setAttribute('aria-hidden', 'true');
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  const defs = document.createElementNS(NS, 'defs');
+  const pattern = document.createElementNS(NS, 'pattern');
+  pattern.setAttribute('id', 'wm-pattern');
+  pattern.setAttribute('width', '420');
+  pattern.setAttribute('height', '170');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  pattern.setAttribute('patternTransform', 'rotate(-28)');
+  const label = document.createElementNS(NS, 'text');
+  label.setAttribute('x', '14');
+  label.setAttribute('y', '90');
+  label.setAttribute('font-size', '15');
+  label.setAttribute('font-weight', '600');
+  label.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
+  label.setAttribute('fill', '#1e293b');
+  label.setAttribute('fill-opacity', '0.17');
+  label.textContent = watermarkText;
+  pattern.appendChild(label);
+  defs.appendChild(pattern);
+  const rect = document.createElementNS(NS, 'rect');
+  rect.setAttribute('width', '100%');
+  rect.setAttribute('height', '100%');
+  rect.setAttribute('fill', 'url(#wm-pattern)');
+  svg.append(defs, rect);
+  overlay.appendChild(svg);
+  paper.appendChild(overlay);
+  return overlay;
+}
+
+function stampCanvas(canvas, text, pageNumber, pageCount) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const size = Math.max(14, Math.round(w / 34));
+  ctx.save();
+  ctx.font = `600 ${size}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.16)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const stepX = Math.max(ctx.measureText(text).width + size * 3, size * 10);
+  const stepY = size * 5;
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(-Math.PI / 6);
+  const reach = Math.hypot(w, h);
+  let row = 0;
+  for (let y = -reach; y <= reach; y += stepY, row += 1) {
+    const offset = (row % 2) * (stepX / 2);
+    for (let x = -reach - stepX; x <= reach + stepX; x += stepX) ctx.fillText(text, x + offset, y);
+  }
+  ctx.restore();
+  ctx.save();
+  const footer = Math.max(11, Math.round(w / 60));
+  ctx.font = `600 ${footer}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.62)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`Licensed to ${text} · page ${pageNumber}/${pageCount}`, w / 2, h - footer * 0.6);
+  ctx.restore();
+  canvas.dataset.wm = text;
+}
+
+// Returns null when printing may continue, or an Arabic message explaining why not.
+function watermarkProblem() {
+  if (!watermarkText) return 'تعذر تحميل العلامة المائية. حدّث الصفحة وفعّل الترخيص من جديد.';
+  if (activeLicense?.document?.storage_path) {
+    const content = $('#document-content');
+    if (content?.dataset.pdfReady !== '1') return 'انتظر حتى يكتمل تحميل الوثيقة ثم اطبع.';
+    const canvases = [...(content.querySelectorAll('.pdf-pages canvas') ?? [])];
+    if (!canvases.length || canvases.some((canvas) => canvas.dataset.wm !== watermarkText)) {
+      return 'لا يمكن طباعة الوثيقة بدون العلامة المائية الخاصة ببريدك. حدّث الصفحة وفعّل الترخيص من جديد.';
+    }
+    return null;
+  }
+  const overlay = $('#watermark-tiles');
+  const style = overlay ? window.getComputedStyle(overlay) : null;
+  if (!overlay || !$('#document-paper')?.contains(overlay) || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) < 0.5 || !overlay.textContent.includes(watermarkText)) {
+    return 'لا يمكن طباعة الوثيقة بدون العلامة المائية الخاصة ببريدك. حدّث الصفحة وفعّل الترخيص من جديد.';
+  }
+  return null;
+}
+
+window.addEventListener('beforeprint', () => {
+  if (document.body.classList.contains('authorized-print') && watermarkProblem()) document.body.classList.remove('authorized-print');
+});
+
 let pdfRenderToken = 0;
-async function renderPdfInto(container, path) {
+async function renderPdfInto(container, path, license) {
   const token = ++pdfRenderToken;
   const message = (text) => {
     const p = document.createElement('p');
@@ -551,8 +689,10 @@ async function renderPdfInto(container, path) {
   };
   container.classList.add('is-pdf');
   container.setAttribute('contenteditable', 'false');
+  container.dataset.pdfReady = '0';
   message('جارٍ تحميل الوثيقة...');
   try {
+    const wmText = await applyWatermark(license);
     await pdfReady;
     if (!pdfjsLib) throw new Error('pdfjs');
     const { data: blob, error } = await supabase.storage.from('documents').download(path);
@@ -577,7 +717,9 @@ async function renderPdfInto(container, path) {
       canvas.setAttribute('aria-label', `صفحة ${n} من ${pages}`);
       wrap.appendChild(canvas);
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      stampCanvas(canvas, wmText, n, pages);
     }
+    if (token === pdfRenderToken) container.dataset.pdfReady = '1';
   } catch (_) {
     if (token === pdfRenderToken) message('تعذر عرض ملف الوثيقة. حدّث الصفحة وحاول مرة أخرى.');
   }
@@ -625,7 +767,7 @@ $('#activation-form')?.addEventListener('submit', async (event) => {
 });
 
 $('#print-button')?.addEventListener('click', async () => {
-  if (!activeLicense || activeLicense.remaining_prints <= 0 || !supabase) return;
+  if (!activeLicense || (!activeLicense.isAdmin && activeLicense.remaining_prints <= 0) || !supabase) return;
   const button = $('#print-button');
   if (button?.disabled) return;
   if (button) button.disabled = true;
@@ -645,10 +787,18 @@ $('#print-button')?.addEventListener('click', async () => {
       return;
     }
     if (authResult.error) throw new Error('تعذر التحقق من جلسة الدخول. حاول مرة أخرى.');
-    activeLicense = await processPrint(activeLicense.license_key, activeLicense.document_id);
-    renderCounters(activeLicense);
+    if (!activeLicense.document.storage_path) ensureWatermarkOverlay();
+    const wmProblem = watermarkProblem();
+    if (wmProblem) throw new Error(wmProblem);
+    if (activeLicense.isAdmin) {
+      const { data: adminCheck } = await supabase.rpc('admin_get_document', { p_id: activeLicense.document_id });
+      if (!adminCheck) throw new Error('صلاحية الأدمن غير متاحة. سجّل الدخول من جديد.');
+    } else {
+      activeLicense = await processPrint(activeLicense.license_key, activeLicense.document_id);
+      renderCounters(activeLicense);
+    }
     document.body.classList.add('authorized-print');
-    setNotice('تم حجز نسخة الطباعة. افتح نافذة الطباعة لإكمال العملية.', 'success');
+    setNotice(activeLicense.isAdmin ? 'وضع الأدمن: لم تُخصم أي نسخة. ستُطبع الوثيقة مع علامة مائية باسمك.' : 'تم حجز نسخة الطباعة. ستُطبع الوثيقة مع علامة مائية باسم بريدك ولا تُطبع بدونها.', 'success');
     const cleanupPrint = () => document.body.classList.remove('authorized-print');
     window.addEventListener('afterprint', cleanupPrint, { once: true });
     window.setTimeout(cleanupPrint, 120000);
@@ -656,7 +806,7 @@ $('#print-button')?.addEventListener('click', async () => {
   } catch (error) {
     setNotice(error.message || 'تعذر تنفيذ الطباعة الآن. حاول مرة أخرى.', 'error');
   } finally {
-    if (button) button.disabled = activeLicense?.remaining_prints <= 0;
+    if (button) button.disabled = !activeLicense?.isAdmin && activeLicense?.remaining_prints <= 0;
   }
 });
 
@@ -753,7 +903,7 @@ async function confirmCheckoutReturn(returnStatus) {
   const deadline = Date.now() + 30000;
   try {
     while (Date.now() < deadline) {
-      const { data: order, error } = await supabase.from('orders').select('id,status,copies_count,document_id,calculated_price,documents(title)').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data: order, error } = await supabase.from('orders').select('id,status,copies_count,document_id,calculated_price').order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (error) {
         setNotice('تعذر تأكيد الطلب بسبب مشكلة اتصال. افتح حسابك لاحقًا لمراجعة حالته.', 'error');
         return;
@@ -772,7 +922,7 @@ async function confirmCheckoutReturn(returnStatus) {
           const license = await getLicense(found.license_key);
           if (license) {
             renderLicense(license);   // also fills the activation field with the key
-            setNotice(`تم الدفع وتفعيل الترخيص تلقائيًا. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة. أرسلنا المفتاح أيضًا إلى بريدك.`, 'success');
+            setNotice(`تم الدفع وتفعيل الترخيص تلقائيًا. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة.`, 'success');
             document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
           }
@@ -1154,6 +1304,76 @@ function buildAdminRow(doc) {
     await loadAdminDocuments();
     await loadCatalogFromSupabase();
   });
+  const openBtn = document.createElement('button');
+  openBtn.type = 'button';
+  openBtn.className = 'admin-mini';
+  openBtn.textContent = 'فتح وطباعة';
+  openBtn.addEventListener('click', async () => {
+    openBtn.disabled = true;
+    const { data, error } = await supabase.rpc('admin_get_document', { p_id: doc.id });
+    openBtn.disabled = false;
+    if (error || !data) return setManageFeedback('تعذر فتح الوثيقة. حاول مرة أخرى.', 'error');
+    $('#admin-manage-dialog')?.close();
+    renderLicense({
+      license_key: `ADMIN-${String(doc.id).replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+      document_id: data.document_id,
+      remaining_prints: 0,
+      total_prints: 0,
+      email: data.email ?? '',
+      isAdmin: true,
+      document: { title: data.title, content: data.content ?? '', storage_path: data.storage_path ?? null, category: 'وثيقة (وضع الأدمن)' }
+    });
+    document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'admin-mini';
+  edit.textContent = 'تعديل';
+  edit.addEventListener('click', () => {
+    const form = document.createElement('form');
+    form.className = 'admin-edit-form';
+    const field = (labelText, input) => {
+      const wrap = document.createElement('label');
+      wrap.textContent = labelText;
+      wrap.appendChild(input);
+      return wrap;
+    };
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text'; titleInput.maxLength = 200; titleInput.required = true; titleInput.value = doc.title;
+    const priceInput = document.createElement('input');
+    priceInput.type = 'number'; priceInput.min = '50'; priceInput.max = '1000000'; priceInput.step = '1'; priceInput.required = true; priceInput.value = doc.price_per_copy;
+    const summaryInput = document.createElement('input');
+    summaryInput.type = 'text'; summaryInput.maxLength = 300; summaryInput.value = doc.summary ?? '';
+    const buttons = document.createElement('div');
+    buttons.className = 'admin-doc-actions';
+    const save = document.createElement('button');
+    save.type = 'submit'; save.className = 'admin-mini'; save.textContent = 'حفظ التعديلات';
+    const cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.className = 'admin-mini'; cancel.textContent = 'إلغاء';
+    cancel.addEventListener('click', () => loadAdminDocuments());
+    buttons.append(save, cancel);
+    form.append(field('العنوان', titleInput), field('السعر لكل نسخة (دج)', priceInput), field('الوصف القصير', summaryInput), buttons);
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const title = titleInput.value.trim();
+      const price = Number(priceInput.value);
+      const summary = summaryInput.value.trim();
+      if (!title || title.length > 200) return setManageFeedback('أدخل عنوانًا من 1 إلى 200 حرف.', 'error');
+      if (!Number.isInteger(price) || price < 50 || price > 1000000) return setManageFeedback('السعر يجب أن يكون عددًا صحيحًا بين 50 و1000000 دج.', 'error');
+      if (summary.length > 300) return setManageFeedback('الوصف لا يتجاوز 300 حرف.', 'error');
+      save.disabled = true;
+      const { error } = await supabase.from('documents').update({ title, price_per_copy: price, summary: summary || null }).eq('id', doc.id);
+      if (error) {
+        setManageFeedback('تعذر حفظ التعديلات. حاول مرة أخرى.', 'error');
+        save.disabled = false;
+        return;
+      }
+      setManageFeedback('تم حفظ التعديلات.', 'success');
+      await loadAdminDocuments();
+      await loadCatalogFromSupabase();
+    });
+    row.replaceChildren(form);
+  });
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'admin-mini danger';
@@ -1161,9 +1381,13 @@ function buildAdminRow(doc) {
   remove.addEventListener('click', async () => {
     if (!window.confirm(`حذف «${doc.title}» نهائيًا؟ لا يمكن التراجع.`)) return;
     remove.disabled = true;
-    const { data, error } = await supabase.rpc('admin_delete_document', { p_id: doc.id });
+    let { data, error } = await supabase.rpc('admin_delete_document', { p_id: doc.id, p_force: false });
+    if (!error && data?.status === 'has_sales') {
+      const sure = window.confirm(`تنبيه: لهذه الوثيقة ${data.paid_orders} طلبات مدفوعة و${data.licenses} تراخيص.\nحذفها سيمنع المشترين من فتحها ولا يمكن التراجع.\nهل تريد الحذف رغم ذلك؟`);
+      if (!sure) { remove.disabled = false; return; }
+      ({ data, error } = await supabase.rpc('admin_delete_document', { p_id: doc.id, p_force: true }));
+    }
     if (error) setManageFeedback('تعذر حذف الوثيقة. حاول مرة أخرى.', 'error');
-    else if (data?.status === 'has_sales') setManageFeedback('لا يمكن حذف وثيقة لها مبيعات أو تراخيص. استعمل «إخفاء من الموقع» بدلًا من ذلك.', 'error');
     else if (data?.status === 'deleted') {
       if (data.storage_path) { try { await supabase.storage.from('documents').remove([data.storage_path]); } catch (_) { /* best effort */ } }
       if (data.preview_path) { try { await supabase.storage.from('previews').remove([data.preview_path]); } catch (_) { /* best effort */ } }
@@ -1172,7 +1396,7 @@ function buildAdminRow(doc) {
     await loadAdminDocuments();
     await loadCatalogFromSupabase();
   });
-  actions.append(toggle, remove);
+  actions.append(openBtn, toggle, edit, remove);
   row.append(info, actions);
   return row;
 }
@@ -1285,6 +1509,11 @@ $('#account-logout')?.addEventListener('click', async () => {
   else {
     renderAccount(null);
     activeLicense = null;
+    pdfRenderToken += 1;
+    $('#security')?.classList.add('is-hidden');
+    const body = $('#document-content');
+    if (body) { body.replaceChildren(); body.classList.remove('is-pdf'); body.dataset.pdfReady = '0'; }
+    if ($('#license-key')) $('#license-key').value = '';
     if ($('#print-button')) $('#print-button').disabled = true;
     setNotice('تم تسجيل الخروج.', 'success');
   }

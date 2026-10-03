@@ -147,9 +147,8 @@ body.capture-blocked .document-paper, body.capture-blocked .document-scene { fil
 .editable-field[contenteditable="true"]:focus { outline:2px solid #2563eb !important; background:rgba(219,234,254,0.85) !important; box-shadow:0 0 0 4px rgba(37,99,235,0.2) !important; }
 
 @media print {
-  .editor-toolbar, .edit-mode-badge, .recipient-box { border:none !important; background:transparent !important; box-shadow:none !important; padding:0 !important; margin:10px 0 !important; }
-  .editor-toolbar { display:none !important; }
-  .editable-field[contenteditable="true"] { outline:none !important; background:transparent !important; box-shadow:none !important; padding:0 !important; margin:0 !important; }
+  .edit-mode-badge, .recipient-box { border:none !important; background:transparent !important; box-shadow:none !important; padding:0 !important; margin:10px 0 !important; }
+    .editable-field[contenteditable="true"] { outline:none !important; background:transparent !important; box-shadow:none !important; padding:0 !important; margin:0 !important; }
 }
 
 /* Admin upload dialog */
@@ -199,3 +198,37 @@ body.capture-blocked .document-paper, body.capture-blocked .document-scene { fil
 .document-body.is-pdf { max-width:none; padding-top:6px; }
 .pdf-pages canvas { display:block; width:100%; height:auto; margin:0 0 12px; border:1px solid #e2e8f0; background:#fff; }
 @media print { body.authorized-print .pdf-pages canvas { border:0; margin:0; break-after:page; break-inside:avoid; } body.authorized-print .document-body.is-pdf { padding:0; } }
+
+/* Editing studio toolbar: visible, sticky, scrolls sideways on phones */
+.editor-toolbar { position:sticky; top:8px; z-index:6; margin:0 0 14px; }
+.editor-toolbar.is-hidden { display:none !important; }
+.toolbar-group { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.toolbar-divider { width:1px; height:24px; background:#dbeafe; }
+.toolbar-select { height:36px; max-width:170px; padding:0 8px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; color:#334155; font:600 12px 'Tajawal',sans-serif; }
+@media (max-width:640px) { .editor-toolbar { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; } .toolbar-group { flex-wrap:nowrap; } .toolbar-divider { flex:none; } }
+
+/* Privacy consent card (sign-in dialog) */
+.auth-dialog .consent-card { display:flex; align-items:flex-start; gap:12px; margin:16px 0 14px; padding:12px 14px; border:1px solid #bfdbfe; border-radius:12px; background:#f0f7ff; }
+.auth-dialog .consent-card input[type="checkbox"] { display:inline-block; flex:none; width:20px; height:20px; margin:2px 0 0; padding:0; accent-color:#2563eb; cursor:pointer; box-shadow:none; }
+.auth-dialog .consent-card label.consent-text { display:block; margin:0; color:#334155; font-size:13px; line-height:1.8; cursor:pointer; }
+.auth-dialog .consent-card .consent-text button { border:0; padding:0; background:none; color:#1d4ed8; font:inherit; font-weight:700; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.auth-dialog .consent-card:has(input:checked) { border-color:#60a5fa; background:#eaf3ff; }
+
+/* File chooser buttons */
+.admin-dialog input[type="file"] { display:block; width:100%; padding:8px; border:1px dashed #93c5fd; border-radius:10px; background:#f8fbff; color:#475569; font:13px 'Tajawal',sans-serif; cursor:pointer; }
+.admin-dialog input[type="file"]::file-selector-button { margin-inline-end:12px; padding:9px 16px; border:0; border-radius:8px; background:#2563eb; color:#fff; font:700 13px 'Tajawal',sans-serif; cursor:pointer; transition:background .15s ease; }
+.admin-dialog input[type="file"]::file-selector-button:hover { background:#1d4ed8; }
+
+/* Admin edit form */
+.admin-edit-form { display:grid; gap:4px; width:100%; }
+.admin-edit-form label { margin-top:8px; font-size:12px; color:#475569; }
+.admin-edit-form input { display:block; width:100%; margin-top:4px; padding:9px 10px; border:1px solid #cbd5e1; border-radius:8px; font:14px 'Tajawal',sans-serif; }
+.admin-edit-form .admin-doc-actions { margin-top:10px; justify-content:flex-start; }
+
+/* Watermark overlay + notice */
+.document-paper { position:relative; }
+#watermark-tiles { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; }
+#watermark-tiles svg { display:block; width:100%; height:100%; }
+@media print { body.authorized-print #watermark-tiles { display:block !important; visibility:visible !important; opacity:1 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+.wm-note { display:flex; gap:8px; align-items:flex-start; margin:12px 0 0; padding:10px 12px; border:1px solid #fde68a; border-radius:10px; background:#fffbeb; color:#92400e; font-size:12px; line-height:1.7; }
+.wm-note svg { flex:none; width:16px; height:16px; margin-top:2px; }
