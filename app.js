@@ -28,6 +28,8 @@ let purchaseAuthCheckPending = false;
 let checkoutReturnStarted = false;
 let pendingReturnStatus = new URLSearchParams(window.location.search).get('status');
 const PENDING_PURCHASE_KEY = 'pending-purchase';
+let isAdmin = false;
+let adminCheckedFor = null;
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => registration.unregister()));
@@ -53,20 +55,39 @@ function restorePendingPurchase() {
 const $ = (selector) => document.querySelector(selector);
 let activeLicense = null;
 
-function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', content = '') {
-  documentCatalog[id] = { title, price: Number(price), category, document_id: id, content };
+function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', summary = '', previewUrl = '') {
+  documentCatalog[id] = { title, price: Number(price), category, document_id: id, summary, previewUrl };
   const existingCard = document.querySelector(`.catalog-card[data-document="${id}"]`);
   if (existingCard) existingCard.remove();
   const card = document.createElement('article');
   card.className = 'catalog-card uploaded-catalog-card';
   card.dataset.document = id;
-  const preview = document.createElement('div');
-  preview.className = 'catalog-preview uploaded-preview';
-  const previewIcon = document.createElement('i');
-  previewIcon.dataset.lucide = 'database';
-  const previewLabel = document.createElement('span');
-  previewLabel.textContent = 'MEDAD / SUPABASE';
-  preview.append(previewIcon, previewLabel);
+  let preview;
+  if (previewUrl) {
+    // Real first-page preview: a normal block above the text (never overlaps it), shown whole.
+    preview = document.createElement('button');
+    preview.type = 'button';
+    preview.className = 'catalog-thumb';
+    preview.setAttribute('aria-label', `معاينة الوثيقة: ${title}`);
+    const image = document.createElement('img');
+    image.src = previewUrl;
+    image.alt = `معاينة ${title}`;
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    const hint = document.createElement('span');
+    hint.className = 'zoom-hint';
+    hint.textContent = 'اضغط للتكبير';
+    preview.append(image, hint);
+    preview.addEventListener('click', () => openPreview(id));
+  } else {
+    preview = document.createElement('div');
+    preview.className = 'catalog-preview uploaded-preview';
+    const previewIcon = document.createElement('i');
+    previewIcon.dataset.lucide = 'file-text';
+    const previewLabel = document.createElement('span');
+    previewLabel.textContent = 'مِداد';
+    preview.append(previewIcon, previewLabel);
+  }
   const body = document.createElement('div');
   body.className = 'catalog-card-body';
   const type = document.createElement('span');
@@ -75,7 +96,7 @@ function addDocumentCardToCatalog(id, title, price, category = 'وثيقة مع�
   const heading = document.createElement('h2');
   heading.textContent = title;
   const description = document.createElement('p');
-  description.textContent = content ? `${content.replace(/<[^>]*>/g, '').slice(0, 80)}...` : 'وثيقة رسمية قابلة للتحقق والطباعة المعتمدة.';
+  description.textContent = summary || 'وثيقة رسمية قابلة للتحقق والطباعة المعتمدة.';
   const footer = document.createElement('div');
   footer.className = 'catalog-footer';
   const priceLabel = document.createElement('strong');
@@ -99,6 +120,17 @@ function addDocumentCardToCatalog(id, title, price, category = 'وثيقة مع�
   window.lucide?.createIcons();
 }
 
+function openPreview(id) {
+  const item = documentCatalog[id];
+  const dialog = $('#preview-dialog');
+  if (!item || !item.previewUrl || !dialog) return;
+  $('#preview-title').textContent = item.title;
+  $('#preview-image').src = item.previewUrl;
+  $('#preview-image').alt = `معاينة ${item.title}`;
+  dialog.dataset.document = id;
+  if (!dialog.open) dialog.showModal();
+}
+
 async function loadCatalogFromSupabase() {
   const catalog = $('.document-catalog');
   if (!catalog) return;
@@ -108,7 +140,7 @@ async function loadCatalogFromSupabase() {
     return;
   }
   try {
-    const { data: docs, error } = await supabase.from('documents').select('id, title, content, price_per_copy, is_published').eq('is_published', true);
+    const { data: docs, error } = await supabase.from('documents').select('id, title, summary, price_per_copy, preview_path, is_published').eq('is_published', true).order('created_at', { ascending: false });
     if (error || !docs) {
       catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
       return;
@@ -119,7 +151,8 @@ async function loadCatalogFromSupabase() {
       return;
     }
     docs.forEach((doc) => {
-      addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.content);
+      const previewUrl = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
+      addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.summary || '', previewUrl);
     });
   } catch (_) {
     catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
@@ -133,6 +166,7 @@ function renderAccount(user) {
     loginTrigger?.classList.remove('is-hidden');
     userProfile?.classList.add('is-hidden');
     closeProfileDropdown();
+    refreshAdminState(null);
     return;
   }
   loginTrigger?.classList.add('is-hidden');
@@ -153,6 +187,7 @@ function renderAccount(user) {
   if ($('#profile-avatar')) $('#profile-avatar').textContent = initial;
   if ($('#profile-provider')) $('#profile-provider').textContent = provider === 'google' ? 'Google' : provider === 'github' ? 'GitHub' : 'البريد الإلكتروني';
   if ($('#profile-role')) $('#profile-role').textContent = 'مشتري';
+  refreshAdminState(user);
 }
 
 function openProfileDropdown() {
@@ -237,15 +272,6 @@ async function loadAccountHistory() {
     list.textContent = 'تعذر تحميل الطلبات الآن. تحقق من اتصالك ثم أعد المحاولة.';
     if (summary) summary.textContent = 'تعذر تحميل البيانات';
     licensesList.textContent = 'تعذر تحميل التراخيص الآن. تحقق من اتصالك ثم أعد المحاولة.';
-  }
-}
-
-function syncConsentState() {
-  const consent = $('#privacy-consent')?.checked;
-  const activationButton = $('#activation-form button');
-  if (activationButton) {
-    activationButton.disabled = !consent;
-    activationButton.setAttribute('aria-disabled', String(!consent));
   }
 }
 
@@ -429,7 +455,7 @@ function setupInteractiveDocumentStudio(license) {
     $('#btn-reset-doc')?.addEventListener('click', () => {
       if (!activeLicense) return;
       if ($('#document-title')) $('#document-title').textContent = activeLicense.document.title;
-      if ($('#document-content')) $('#document-content').replaceChildren(sanitizeDocumentHtml(activeLicense.document.content));
+      if ($('#document-content') && !activeLicense.document.storage_path) $('#document-content').replaceChildren(sanitizeDocumentHtml(activeLicense.document.content ?? ''));
       const paper = $('#document-paper');
       if (paper) paper.className = 'document-paper';
       setNotice('تمت إعادة تعيين محتوى الوثيقة والتنسيقات إلى الوضع الأصلي.', 'info');
@@ -446,9 +472,16 @@ function renderLicense(license) {
   if ($('#doc-id')) $('#doc-id').textContent = license.license_key.slice(-6);
   if ($('#document-title')) $('#document-title').textContent = license.document.title;
   if ($('#doc-category')) $('#doc-category').textContent = license.document.category || 'وثيقة مرخصة';
-  if ($('#document-content')) $('#document-content').replaceChildren(sanitizeDocumentHtml(license.document.content));
+  if ($('#license-key')) $('#license-key').value = license.license_key;
+  const contentEl = $('#document-content');
+  if (contentEl && !license.document.storage_path) {
+    contentEl.classList.remove('is-pdf');
+    contentEl.replaceChildren(sanitizeDocumentHtml(license.document.content ?? ''));
+  }
 
   setupInteractiveDocumentStudio(license);
+  if (contentEl && license.document.storage_path) renderPdfInto(contentEl, license.document.storage_path);
+  else if (contentEl) contentEl.setAttribute('contenteditable', 'true');
 
   supabase?.auth.getUser().then(({ data: { user } }) => {
     const watermark = user?.email ? `مِداد / ${user.email} / ${license.license_key.slice(-8)}` : `مِداد / ${license.license_key.slice(-8)}`;
@@ -488,28 +521,66 @@ async function getLicense(key) {
     throw new Error('تعذر الاتصال بخدمة التراخيص. تحقق من اتصالك ثم حاول مرة أخرى.');
   }
   if (!user) throw new Error('سجّل الدخول قبل تفعيل الترخيص.');
-  let licenseResult;
+  let result;
   try {
-    licenseResult = await supabase.from('print_licenses').select('license_key,document_id,remaining_prints,order_id,documents(title,content)').eq('license_key', cleanKey).maybeSingle();
+    // The server returns the paid content only to the account that owns this license.
+    result = await supabase.rpc('get_licensed_document', { p_license_key: cleanKey });
   } catch (_) {
     throw new Error('تعذر التحقق من الترخيص الآن. تحقق من اتصالك ثم حاول مرة أخرى.');
   }
-  const { data, error } = licenseResult;
+  const { data, error } = result;
   if (error) throw new Error('تعذر التحقق من الترخيص الآن. حاول مرة أخرى.');
   if (!data) return null;
-  let orderResult;
-  try {
-    orderResult = await supabase.from('orders').select('copies_count').eq('id', data.order_id).maybeSingle();
-  } catch (_) {
-    throw new Error('تعذر تحميل بيانات الطلب المرتبط بالترخيص.');
-  }
-  const { data: order, error: orderError } = orderResult;
-  if (orderError || !order) throw new Error('تعذر تحميل بيانات الطلب المرتبط بالترخيص.');
   return {
-    ...data,
-    total_prints: Number(order.copies_count),
-    document: { ...(data.documents ?? {}), category: 'وثيقة مرخصة' }
+    license_key: data.license_key,
+    document_id: data.document_id,
+    remaining_prints: Number(data.remaining_prints),
+    order_id: data.order_id,
+    total_prints: Number(data.copies_count ?? data.remaining_prints),
+    document: { title: data.title, content: data.content ?? '', storage_path: data.storage_path ?? null, category: 'وثيقة مرخصة' }
   };
+}
+
+let pdfRenderToken = 0;
+async function renderPdfInto(container, path) {
+  const token = ++pdfRenderToken;
+  const message = (text) => {
+    const p = document.createElement('p');
+    p.textContent = text;
+    container.replaceChildren(p);
+  };
+  container.classList.add('is-pdf');
+  container.setAttribute('contenteditable', 'false');
+  message('جارٍ تحميل الوثيقة...');
+  try {
+    await pdfReady;
+    if (!pdfjsLib) throw new Error('pdfjs');
+    const { data: blob, error } = await supabase.storage.from('documents').download(path);
+    if (error || !blob) throw error || new Error('download');
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    if (token !== pdfRenderToken) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'pdf-pages';
+    container.replaceChildren(wrap);
+    const cssWidth = Math.min(Math.max(container.clientWidth || 600, 280), 900);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const pages = Math.min(pdf.numPages, 200);
+    for (let n = 1; n <= pages; n += 1) {
+      const page = await pdf.getPage(n);
+      if (token !== pdfRenderToken) return;
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: (cssWidth / base.width) * ratio });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', `صفحة ${n} من ${pages}`);
+      wrap.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    }
+  } catch (_) {
+    if (token === pdfRenderToken) message('تعذر عرض ملف الوثيقة. حدّث الصفحة وحاول مرة أخرى.');
+  }
 }
 
 async function processPrint(licenseKey, documentId) {
@@ -527,11 +598,6 @@ async function processPrint(licenseKey, documentId) {
 
 $('#activation-form')?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (!$('#privacy-consent')?.checked) {
-    setNotice('يجب الموافقة على سياسة الخصوصية قبل تفعيل الوثيقة.', 'error');
-    $('#privacy-consent')?.focus();
-    return;
-  }
   const key = $('#license-key')?.value.trim().toUpperCase();
   if (!key || !key.startsWith('LIC-') || key.length < 12) {
     setNotice('صيغة المفتاح غير صحيحة. استخدم مفتاح LIC الصحيح.', 'error');
@@ -558,8 +624,6 @@ $('#activation-form')?.addEventListener('submit', async (event) => {
   }
 });
 
-$('#privacy-consent')?.addEventListener('change', syncConsentState);
-
 $('#print-button')?.addEventListener('click', async () => {
   if (!activeLicense || activeLicense.remaining_prints <= 0 || !supabase) return;
   const button = $('#print-button');
@@ -582,18 +646,33 @@ $('#print-button')?.addEventListener('click', async () => {
     }
     if (authResult.error) throw new Error('تعذر التحقق من جلسة الدخول. حاول مرة أخرى.');
     activeLicense = await processPrint(activeLicense.license_key, activeLicense.document_id);
-    renderLicense(activeLicense);
-    if (activeLicense.remaining_prints < 0) throw new Error('لا توجد نسخ متبقية للطباعة.');
+    renderCounters(activeLicense);
     document.body.classList.add('authorized-print');
     setNotice('تم حجز نسخة الطباعة. افتح نافذة الطباعة لإكمال العملية.', 'success');
+    const cleanupPrint = () => document.body.classList.remove('authorized-print');
+    window.addEventListener('afterprint', cleanupPrint, { once: true });
+    window.setTimeout(cleanupPrint, 120000);
     window.print();
   } catch (error) {
     setNotice(error.message || 'تعذر تنفيذ الطباعة الآن. حاول مرة أخرى.', 'error');
   } finally {
     if (button) button.disabled = activeLicense?.remaining_prints <= 0;
-    window.setTimeout(() => document.body.classList.remove('authorized-print'), 500);
   }
 });
+
+// Updates only the counters (never rebuilds the document, so the user's edits are kept).
+function renderCounters(license) {
+  const remaining = Math.max(0, Number(license.remaining_prints));
+  const total = Math.max(remaining, Number(license.total_prints ?? remaining));
+  const used = total - remaining;
+  if ($('#prints-remaining')) $('#prints-remaining').textContent = remaining;
+  if ($('#prints-used')) $('#prints-used').textContent = used;
+  if ($('#total-prints')) $('#total-prints').textContent = total;
+  if ($('#progress-bar')) $('#progress-bar').style.width = `${total ? Math.min(100, (used / total) * 100) : 0}%`;
+  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #dbeafe 0deg)`;
+  const printBtn = $('#print-button');
+  if (printBtn) printBtn.disabled = remaining <= 0;
+}
 
 class CheckoutError extends Error {}
 
@@ -684,15 +763,19 @@ async function confirmCheckoutReturn(returnStatus) {
         return;
       }
       if (order?.status === 'paid') {
-        const { data: license, error: licenseError } = await supabase.from('print_licenses').select('license_key,document_id,remaining_prints,order_id,documents(title,content)').eq('order_id', order.id).maybeSingle();
+        const { data: found, error: licenseError } = await supabase.from('print_licenses').select('license_key').eq('order_id', order.id).maybeSingle();
         if (licenseError) {
           setNotice('تم تأكيد الدفع، لكن تعذر تحميل الترخيص الآن. افتح حسابك بعد قليل.', 'error');
           return;
         }
-        if (license) {
-          renderLicense({ ...license, total_prints: Number(order.copies_count), document: { ...(license.documents ?? {}), category: 'وثيقة مرخصة' } });
-          setNotice(`تم الدفع وتفعيل الترخيص. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة.`, 'success');
-          return;
+        if (found) {
+          const license = await getLicense(found.license_key);
+          if (license) {
+            renderLicense(license);   // also fills the activation field with the key
+            setNotice(`تم الدفع وتفعيل الترخيص تلقائيًا. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة. أرسلنا المفتاح أيضًا إلى بريدك.`, 'success');
+            document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
         }
       }
       await new Promise((resolve) => window.setTimeout(resolve, 3000));
@@ -737,6 +820,8 @@ function openAuthDialog(mode = 'signup') {
   $('#auth-switch')?.classList.toggle('is-hidden', mode === 'reset');
   document.querySelector('.oauth-divider')?.classList.toggle('is-hidden', mode === 'reset');
   document.querySelector('.oauth-buttons')?.classList.toggle('is-hidden', mode === 'reset');
+  if ($('#auth-consent')) $('#auth-consent').checked = readConsent();
+  $('#auth-consent-wrap')?.classList.toggle('is-hidden', mode === 'reset');
   setAuthFeedback('');
   if (!$('#auth-dialog')?.open) $('#auth-dialog')?.showModal();
   window.lucide?.createIcons();
@@ -837,6 +922,291 @@ $('#start-provider-checkout')?.addEventListener('click', async (event) => {
   }
 });
 
+// ---------- Admin: upload documents (the real gate is RLS; this only shows/hides the UI) ----------
+async function refreshAdminState(user) {
+  const userId = user?.id ?? null;
+  if (userId !== adminCheckedFor) {
+    adminCheckedFor = userId;
+    isAdmin = false;
+    if (userId && supabase) {
+      try {
+        const { data, error } = await supabase.from('admins').select('user_id').eq('user_id', userId).maybeSingle();
+        if (adminCheckedFor === userId) isAdmin = !error && !!data;
+      } catch (_) {
+        isAdmin = false;
+      }
+    }
+  }
+  $('#admin-open')?.classList.toggle('is-hidden', !isAdmin);
+  $('#admin-manage-open')?.classList.toggle('is-hidden', !isAdmin);
+  if (userId && $('#profile-role')) $('#profile-role').textContent = isAdmin ? 'أدمن' : 'مشتري';
+}
+
+function plainTextToHtml(text) {
+  const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return text.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+function setAdminFeedback(message, type = '') {
+  const feedback = $('#admin-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.className = `auth-feedback ${type}`;
+}
+
+let adminPreviewBlob = null;
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+
+async function renderPdfPreviewBlob(file) {
+  await pdfReady;
+  if (!pdfjsLib) throw new Error('pdfjs');
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const page = await pdf.getPage(1);
+  const base = page.getViewport({ scale: 1 });
+  const viewport = page.getViewport({ scale: 900 / base.width });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: context, viewport }).promise;
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+  if (!blob) throw new Error('preview');
+  return blob;
+}
+
+function resetAdminForm() {
+  $('#admin-form')?.reset();
+  adminPreviewBlob = null;
+  const image = $('#admin-preview-img');
+  if (image?.dataset.url) URL.revokeObjectURL(image.dataset.url);
+  if (image) { image.removeAttribute('src'); delete image.dataset.url; }
+  $('#admin-preview-wrap')?.classList.add('is-hidden');
+}
+
+$('#admin-open')?.addEventListener('click', () => {
+  if (!isAdmin) return;
+  closeProfileDropdown();
+  setAdminFeedback('');
+  $('#admin-dialog')?.showModal();
+});
+$('#admin-close')?.addEventListener('click', () => $('#admin-dialog')?.close());
+
+$('#admin-pdf')?.addEventListener('change', async (event) => {
+  const input = event.target;
+  const file = input.files?.[0];
+  adminPreviewBlob = null;
+  $('#admin-preview-wrap')?.classList.add('is-hidden');
+  if (!file) return;
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+    setAdminFeedback('اختر ملف PDF صالحًا.', 'error');
+    input.value = '';
+    return;
+  }
+  if (file.size > MAX_PDF_BYTES) {
+    setAdminFeedback('ملف PDF كبير جدًا. الحد الأقصى 20 ميغابايت.', 'error');
+    input.value = '';
+    return;
+  }
+  setAdminFeedback('جارٍ تجهيز المعاينة...');
+  try {
+    adminPreviewBlob = await renderPdfPreviewBlob(file);
+    const image = $('#admin-preview-img');
+    if (image.dataset.url) URL.revokeObjectURL(image.dataset.url);
+    image.dataset.url = URL.createObjectURL(adminPreviewBlob);
+    image.src = image.dataset.url;
+    $('#admin-preview-wrap')?.classList.remove('is-hidden');
+    if (!$('#admin-title').value.trim()) $('#admin-title').value = file.name.replace(/\.[^.]+$/, '').slice(0, 200);
+    setAdminFeedback('');
+  } catch (_) {
+    setAdminFeedback('تعذر قراءة ملف PDF. تأكد أنه غير تالف وغير محمي بكلمة مرور.', 'error');
+    input.value = '';
+  }
+});
+
+$('#admin-file')?.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > 200000) {
+    setAdminFeedback('الملف كبير جدًا. الحد الأقصى 200 كيلوبايت.', 'error');
+    event.target.value = '';
+    return;
+  }
+  try {
+    const text = await file.text();
+    const isPlain = /\.txt$/i.test(file.name) || file.type === 'text/plain';
+    $('#admin-content').value = isPlain ? plainTextToHtml(text) : text;
+    if (!$('#admin-title').value.trim()) $('#admin-title').value = file.name.replace(/\.[^.]+$/, '').slice(0, 200);
+    setAdminFeedback('تم تحميل محتوى الملف. راجعه ثم اضغط رفع.', 'success');
+  } catch (_) {
+    setAdminFeedback('تعذر قراءة الملف. جرّب ملفًا آخر.', 'error');
+  }
+});
+
+$('#admin-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!isAdmin || !supabase) return setAdminFeedback('هذه الأداة للأدمن فقط.', 'error');
+  const title = $('#admin-title').value.trim();
+  const price = Number($('#admin-price').value);
+  const summary = $('#admin-summary').value.trim();
+  const pdfFile = $('#admin-pdf').files?.[0] ?? null;
+  let content = $('#admin-content').value.trim();
+  if (!title || title.length > 200) return setAdminFeedback('أدخل عنوانًا من 1 إلى 200 حرف.', 'error');
+  if (!Number.isInteger(price) || price < 50 || price > 1000000) return setAdminFeedback('السعر يجب أن يكون عددًا صحيحًا بين 50 و1000000 دج.', 'error');
+  if (summary.length > 300) return setAdminFeedback('الوصف القصير لا يتجاوز 300 حرف.', 'error');
+  if (!pdfFile && !content) return setAdminFeedback('ارفع ملف PDF أو اكتب محتوى الوثيقة.', 'error');
+  if (content.length > 200000) return setAdminFeedback('المحتوى لا يتجاوز 200 ألف حرف.', 'error');
+  if (pdfFile && pdfFile.size > MAX_PDF_BYTES) return setAdminFeedback('ملف PDF كبير جدًا. الحد الأقصى 20 ميغابايت.', 'error');
+  if (content && !/<[a-z][\s\S]*>/i.test(content)) content = plainTextToHtml(content);
+  const submit = $('#admin-submit');
+  const label = submit?.querySelector('span');
+  if (submit) submit.disabled = true;
+  if (label) label.textContent = 'جارٍ الرفع...';
+  setAdminFeedback('');
+  const id = crypto.randomUUID();
+  const uploaded = [];
+  try {
+    let storagePath = null;
+    let previewPath = null;
+    if (pdfFile) {
+      storagePath = `${id}.pdf`;
+      const pdfUpload = await supabase.storage.from('documents').upload(storagePath, pdfFile, { contentType: 'application/pdf', upsert: false });
+      if (pdfUpload.error) throw pdfUpload.error;
+      uploaded.push(['documents', storagePath]);
+      if ($('#admin-preview-on')?.checked) {
+        const blob = adminPreviewBlob ?? await renderPdfPreviewBlob(pdfFile);
+        previewPath = `${id}.jpg`;
+        const previewUpload = await supabase.storage.from('previews').upload(previewPath, blob, { contentType: 'image/jpeg', upsert: false });
+        if (previewUpload.error) throw previewUpload.error;
+        uploaded.push(['previews', previewPath]);
+      }
+    }
+    const { error } = await supabase.from('documents').insert({
+      id, title, price_per_copy: price, summary: summary || null,
+      content: pdfFile ? '' : content, storage_path: storagePath, preview_path: previewPath,
+      is_published: $('#admin-publish').checked
+    });
+    if (error) throw error;
+    resetAdminForm();
+    $('#admin-dialog')?.close();
+    setNotice('تمت إضافة الوثيقة بنجاح.', 'success');
+    await loadCatalogFromSupabase();
+  } catch (error) {
+    for (const [bucket, path] of uploaded) {
+      try { await supabase.storage.from(bucket).remove([path]); } catch (_) { /* best effort */ }
+    }
+    const denied = error?.code === '42501' || /row-level security|unauthorized|403/i.test(String(error?.message ?? ''));
+    setAdminFeedback(denied ? 'ليس لديك صلاحية الأدمن لرفع الوثائق.' : 'تعذر رفع الوثيقة الآن. حاول مرة أخرى.', 'error');
+  } finally {
+    if (submit) submit.disabled = false;
+    if (label) label.textContent = 'رفع الوثيقة';
+  }
+});
+
+// ---------- Admin: manage documents (hide / show / delete) ----------
+function setManageFeedback(message, type = '') {
+  const feedback = $('#admin-manage-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.className = `auth-feedback ${type}`;
+}
+
+async function loadAdminDocuments() {
+  const list = $('#admin-doc-list');
+  if (!list || !supabase || !isAdmin) return;
+  list.textContent = 'جارٍ تحميل الوثائق...';
+  const { data, error } = await supabase.rpc('admin_list_documents');
+  if (error || !Array.isArray(data)) {
+    list.textContent = 'تعذر تحميل الوثائق. حاول مرة أخرى.';
+    return;
+  }
+  list.replaceChildren();
+  if (!data.length) {
+    list.textContent = 'لا توجد وثائق بعد.';
+    return;
+  }
+  data.forEach((doc) => list.appendChild(buildAdminRow(doc)));
+}
+
+function buildAdminRow(doc) {
+  const row = document.createElement('div');
+  row.className = 'admin-doc-row';
+  const info = document.createElement('div');
+  info.className = 'admin-doc-info';
+  const name = document.createElement('strong');
+  name.textContent = doc.title;
+  const meta = document.createElement('small');
+  meta.textContent = `${doc.price_per_copy} دج • ${Number(doc.sales)} مبيعات • ${doc.is_published ? 'منشورة' : 'مخفية'}${doc.storage_path ? ' • PDF' : ''}`;
+  info.append(name, meta);
+  const actions = document.createElement('div');
+  actions.className = 'admin-doc-actions';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'admin-mini';
+  toggle.textContent = doc.is_published ? 'إخفاء من الموقع' : 'إظهار في الموقع';
+  toggle.addEventListener('click', async () => {
+    toggle.disabled = true;
+    const { error } = await supabase.from('documents').update({ is_published: !doc.is_published }).eq('id', doc.id);
+    if (error) setManageFeedback('تعذر تحديث حالة الوثيقة. حاول مرة أخرى.', 'error');
+    else setManageFeedback(doc.is_published ? 'تم إخفاء الوثيقة من الموقع.' : 'أصبحت الوثيقة ظاهرة في الموقع.', 'success');
+    await loadAdminDocuments();
+    await loadCatalogFromSupabase();
+  });
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'admin-mini danger';
+  remove.textContent = 'حذف نهائي';
+  remove.addEventListener('click', async () => {
+    if (!window.confirm(`حذف «${doc.title}» نهائيًا؟ لا يمكن التراجع.`)) return;
+    remove.disabled = true;
+    const { data, error } = await supabase.rpc('admin_delete_document', { p_id: doc.id });
+    if (error) setManageFeedback('تعذر حذف الوثيقة. حاول مرة أخرى.', 'error');
+    else if (data?.status === 'has_sales') setManageFeedback('لا يمكن حذف وثيقة لها مبيعات أو تراخيص. استعمل «إخفاء من الموقع» بدلًا من ذلك.', 'error');
+    else if (data?.status === 'deleted') {
+      if (data.storage_path) { try { await supabase.storage.from('documents').remove([data.storage_path]); } catch (_) { /* best effort */ } }
+      if (data.preview_path) { try { await supabase.storage.from('previews').remove([data.preview_path]); } catch (_) { /* best effort */ } }
+      setManageFeedback('تم حذف الوثيقة نهائيًا.', 'success');
+    } else setManageFeedback('الوثيقة غير موجودة.', 'error');
+    await loadAdminDocuments();
+    await loadCatalogFromSupabase();
+  });
+  actions.append(toggle, remove);
+  row.append(info, actions);
+  return row;
+}
+
+$('#admin-manage-open')?.addEventListener('click', () => {
+  if (!isAdmin) return;
+  closeProfileDropdown();
+  setManageFeedback('');
+  $('#admin-manage-dialog')?.showModal();
+  loadAdminDocuments();
+});
+$('#admin-manage-close')?.addEventListener('click', () => $('#admin-manage-dialog')?.close());
+
+// ---------- Preview lightbox ----------
+$('#preview-close')?.addEventListener('click', () => $('#preview-dialog')?.close());
+$('#preview-dialog')?.addEventListener('click', (event) => { if (event.target === $('#preview-dialog')) $('#preview-dialog')?.close(); });
+$('#preview-buy')?.addEventListener('click', () => {
+  const id = $('#preview-dialog')?.dataset.document;
+  $('#preview-dialog')?.close();
+  if (id) openPurchase(id);
+});
+$('#privacy-accept')?.addEventListener('click', () => $('#privacy-dialog')?.close());
+
+// ---------- Consent (privacy policy + terms) lives in the sign-in dialog ----------
+const CONSENT_KEY = 'medad-terms-v2';
+function readConsent() { try { return localStorage.getItem(CONSENT_KEY) === '1'; } catch (_) { return false; } }
+function saveConsent() { try { localStorage.setItem(CONSENT_KEY, '1'); } catch (_) { /* ignore */ } }
+function requireConsent() {
+  if ($('#auth-consent')?.checked) return true;
+  setAuthFeedback('يجب الموافقة على سياسة الخصوصية وشروط الاستخدام للمتابعة.', 'error');
+  $('#auth-consent')?.focus();
+  return false;
+}
+
 $('#auth-close')?.addEventListener('click', () => $('#auth-dialog')?.close());
 $('#auth-switch')?.addEventListener('click', () => openAuthDialog(authMode === 'signup' ? 'login' : 'signup'));
 $('#forgot-password')?.addEventListener('click', async () => {
@@ -856,6 +1226,7 @@ $('#auth-form')?.addEventListener('submit', async (event) => {
     setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
     return;
   }
+  if (authMode !== 'reset' && !requireConsent()) return;
   const email = $('#auth-email')?.value.trim();
   const password = $('#auth-password')?.value;
   const submit = $('#auth-submit');
@@ -865,9 +1236,10 @@ $('#auth-form')?.addEventListener('submit', async (event) => {
     const result = authMode === 'reset'
       ? await supabase.auth.updateUser({ password })
       : authMode === 'signup'
-        ? await supabase.auth.signUp({ email, password })
+        ? await supabase.auth.signUp({ email, password, options: { data: { accepted_terms: 'v2', accepted_terms_at: new Date().toISOString() } } })
         : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) throw result.error;
+    if (authMode !== 'reset') saveConsent();
     if (authMode === 'reset') {
       setAuthFeedback('تم تحديث كلمة المرور بنجاح.', 'success');
       $('#auth-dialog')?.close();
@@ -891,6 +1263,8 @@ async function startOAuth(provider) {
     setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
     return;
   }
+  if (!requireConsent()) return;
+  saveConsent();
   try {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -940,7 +1314,6 @@ document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener(
 }));
 
 loadCatalogFromSupabase();
-syncConsentState();
 restorePendingPurchase();
 supabase?.auth.getSession().then(({ data: { session }, error }) => {
   if (error) {
