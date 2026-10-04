@@ -327,7 +327,11 @@ document.addEventListener('focusin', (e) => {
 function setupInteractiveDocumentStudio(license) {
   const editBadge = $('#edit-mode-badge');
   const toolbar = $('#editor-toolbar');
-  const lockedPdf = Boolean(license?.document?.storage_path);
+  const isFile = Boolean(license?.document?.storage_path);
+  const lockedPdf = isFile || Boolean(license?.isShop);
+  $('#pdf-toolbar')?.classList.toggle('is-hidden', !(isFile && !license?.isShop));
+  $('#document-paper')?.classList.toggle('pdf-mode', isFile);
+  initPdfToolbar();
   if (editBadge) editBadge.classList.toggle('is-hidden', lockedPdf);
   if (toolbar) toolbar.classList.toggle('is-hidden', lockedPdf);
 
@@ -501,7 +505,7 @@ function renderLicense(license) {
   const isPdf = Boolean(license.document.storage_path);
   applyWatermark(license);
   if (contentEl && isPdf) renderPdfInto(contentEl, license.document.storage_path, license);
-  else if (contentEl) contentEl.setAttribute('contenteditable', 'true');
+  else if (contentEl) contentEl.setAttribute('contenteditable', license.isShop ? 'false' : 'true');
 
   if ($('#prints-remaining')) $('#prints-remaining').textContent = remaining;
   if ($('#prints-used')) $('#prints-used').textContent = used;
@@ -512,22 +516,28 @@ function renderLicense(license) {
   const stateEl = $('#license-state');
   if (stateEl) {
     stateEl.classList.add('active');
-    stateEl.innerHTML = license.isAdmin ? '<span class="state-dot"></span> وضع الأدمن' : '<span class="state-dot"></span> مفعل الآن';
+    stateEl.innerHTML = license.isAdmin ? '<span class="state-dot"></span> وضع الأدمن' : license.isShop ? '<span class="state-dot"></span> وضع المطبعة' : '<span class="state-dot"></span> مفعل الآن';
   }
-  if (license.isAdmin) {
-    if ($('#prints-remaining')) $('#prints-remaining').textContent = '∞';
+  if (license.isAdmin || license.isShop) {
+    const symbol = license.isShop ? '—' : '∞';
+    if ($('#prints-remaining')) $('#prints-remaining').textContent = symbol;
     if ($('#prints-used')) $('#prints-used').textContent = '0';
-    if ($('#total-prints')) $('#total-prints').textContent = '∞';
+    if ($('#total-prints')) $('#total-prints').textContent = symbol;
     if ($('#progress-bar')) $('#progress-bar').style.width = '0%';
     if ($('#counter-ring')) $('#counter-ring').style.background = 'conic-gradient(#2563eb 360deg, #dbeafe 0deg)';
     if ($('#license-key')) $('#license-key').value = '';
   }
   
   const printBtn = $('#print-button');
-  if (printBtn) printBtn.disabled = !license.isAdmin && remaining <= 0;
+  if (printBtn) printBtn.disabled = !(license.isAdmin || license.isShop) && remaining <= 0;
+  const canShop = !license.isAdmin && !license.isShop && remaining > 0;
+  $('#shop-open')?.classList.toggle('is-hidden', !canShop);
+  $('#shop-hint')?.classList.toggle('is-hidden', !canShop);
   
-  if (license.isAdmin) setNotice('وضع الأدمن: تعرض وتطبع أي وثيقة بدون دفع وبدون خصم نسخ، وتبقى العلامة المائية باسمك.', 'info');
-  else setNotice(isPdf ? 'تم تفعيل المستند. ملفات PDF تُعرض كما هي ولا تُعدَّل، وتُطبع دائمًا مع علامة مائية باسم بريدك.' : 'تم تفعيل المستند بنجاح. يمكنك تعديله قبل الطباعة، لكنه يُطبع دائمًا مع علامة مائية باسم بريدك ولا يُطبع بدونها.', 'success');
+  const wmInfo = 'العلامة المائية باسم بريدك تظهر على الشاشة فقط ولن تُطبع.';
+  if (license.isAdmin) setNotice(`وضع الأدمن: تعرض وتطبع أي وثيقة بدون دفع وبدون خصم نسخ. ${wmInfo}`, 'info');
+  else if (license.isShop) setNotice(`وضع المطبعة: الوثيقة جاهزة للطباعة${license.shopExpiresAt ? ` (الرمز صالح حتى ${new Date(license.shopExpiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })})` : ''}. ${wmInfo}`, 'success');
+  else setNotice(isPdf ? `تم تفعيل المستند. أضف نصًا فوق الملف أينما تريد من شريط الأدوات ثم اطبع. ${wmInfo}` : `تم تفعيل المستند بنجاح. يمكنك تعديله قبل الطباعة. ${wmInfo}`, 'success');
   window.lucide?.createIcons();
 }
 
@@ -573,14 +583,14 @@ async function applyWatermark(license) {
       email = session?.user?.email || '';
     } catch (_) { /* fall back to the key only */ }
   }
-  const tail = String(license?.license_key ?? '').slice(-6);
+  const tail = license?.watermarkTag ?? String(license?.license_key ?? '').slice(-6);
   watermarkText = `${email || 'MEDAD'} · ${tail}`;
   document.querySelectorAll('.paper-watermark').forEach((element) => {
     element.textContent = watermarkText;
     element.dataset.watermark = watermarkText;
   });
   document.body.dataset.printWatermark = watermarkText;
-  if (!license?.document?.storage_path) ensureWatermarkOverlay();
+  ensureWatermarkOverlay();
   return watermarkText;
 }
 
@@ -623,63 +633,139 @@ function ensureWatermarkOverlay() {
   return overlay;
 }
 
-function stampCanvas(canvas, text, pageNumber, pageCount) {
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
-  const size = Math.max(14, Math.round(w / 34));
-  ctx.save();
-  ctx.font = `600 ${size}px Arial, Helvetica, sans-serif`;
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.16)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const stepX = Math.max(ctx.measureText(text).width + size * 3, size * 10);
-  const stepY = size * 5;
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate(-Math.PI / 6);
-  const reach = Math.hypot(w, h);
-  let row = 0;
-  for (let y = -reach; y <= reach; y += stepY, row += 1) {
-    const offset = (row % 2) * (stepX / 2);
-    for (let x = -reach - stepX; x <= reach + stepX; x += stepX) ctx.fillText(text, x + offset, y);
-  }
-  ctx.restore();
-  ctx.save();
-  const footer = Math.max(11, Math.round(w / 60));
-  ctx.font = `600 ${footer}px Arial, Helvetica, sans-serif`;
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.62)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(`Licensed to ${text} · page ${pageNumber}/${pageCount}`, w / 2, h - footer * 0.6);
-  ctx.restore();
-  canvas.dataset.wm = text;
-}
-
-// Returns null when printing may continue, or an Arabic message explaining why not.
-function watermarkProblem() {
-  if (!watermarkText) return 'تعذر تحميل العلامة المائية. حدّث الصفحة وفعّل الترخيص من جديد.';
-  if (activeLicense?.document?.storage_path) {
-    const content = $('#document-content');
-    if (content?.dataset.pdfReady !== '1') return 'انتظر حتى يكتمل تحميل الوثيقة ثم اطبع.';
-    const canvases = [...(content.querySelectorAll('.pdf-pages canvas') ?? [])];
-    if (!canvases.length || canvases.some((canvas) => canvas.dataset.wm !== watermarkText)) {
-      return 'لا يمكن طباعة الوثيقة بدون العلامة المائية الخاصة ببريدك. حدّث الصفحة وفعّل الترخيص من جديد.';
-    }
-    return null;
-  }
-  const overlay = $('#watermark-tiles');
-  const style = overlay ? window.getComputedStyle(overlay) : null;
-  if (!overlay || !$('#document-paper')?.contains(overlay) || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) < 0.5 || !overlay.textContent.includes(watermarkText)) {
-    return 'لا يمكن طباعة الوثيقة بدون العلامة المائية الخاصة ببريدك. حدّث الصفحة وفعّل الترخيص من جديد.';
-  }
-  return null;
-}
-
-window.addEventListener('beforeprint', () => {
-  if (document.body.classList.contains('authorized-print') && watermarkProblem()) document.body.classList.remove('authorized-print');
-});
-
 let pdfRenderToken = 0;
+const MAX_PDF_PAGES = 80;
+let annotSelected = null;
+let annotPlacing = false;
+let annotSize = 2.4;
+let annotColor = '#111827';
+let annotBold = false;
+let pdfToolbarReady = false;
+
+const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value));
+
+function setPlacing(on) {
+  annotPlacing = on;
+  document.body.classList.toggle('annot-placing', on);
+  $('#pdf-add-text')?.classList.toggle('active', on);
+  if (on) setNotice('اضغط على الملف في المكان الذي تريد الكتابة فيه.', 'info');
+}
+
+function selectAnnot(element) {
+  annotSelected?.classList.remove('selected');
+  annotSelected = element;
+  element?.classList.add('selected');
+}
+
+function createAnnot(layer, xPct, yPct) {
+  const box = document.createElement('div');
+  box.className = 'annot';
+  box.style.left = `${xPct}%`;
+  box.style.top = `${yPct}%`;
+  box.dataset.size = String(annotSize);
+  box.style.fontSize = `${annotSize}cqw`;
+  box.style.color = annotColor;
+  box.style.fontWeight = annotBold ? '700' : '400';
+  const handle = document.createElement('span');
+  handle.className = 'annot-handle';
+  handle.setAttribute('aria-label', 'تحريك النص');
+  handle.textContent = '✥';
+  const text = document.createElement('div');
+  text.className = 'annot-text';
+  text.contentEditable = 'true';
+  text.spellcheck = false;
+  text.dir = 'auto';
+  text.textContent = 'نص جديد';
+  box.append(handle, text);
+  layer.appendChild(box);
+  text.addEventListener('focus', () => selectAnnot(box));
+  text.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const pasted = (event.clipboardData || window.clipboardData)?.getData('text/plain') ?? '';
+    document.execCommand('insertText', false, pasted);
+  });
+  handle.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    selectAnnot(box);
+    handle.setPointerCapture(event.pointerId);
+    const rect = layer.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startLeft = parseFloat(box.style.left);
+    const startTop = parseFloat(box.style.top);
+    const move = (moveEvent) => {
+      box.style.left = `${clampNumber(startLeft + ((moveEvent.clientX - startX) / rect.width) * 100, 0, 94)}%`;
+      box.style.top = `${clampNumber(startTop + ((moveEvent.clientY - startY) / rect.height) * 100, 0, 96)}%`;
+    };
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  });
+  selectAnnot(box);
+  text.focus();
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return box;
+}
+
+function wireAnnotLayer(layer) {
+  layer.addEventListener('pointerdown', (event) => {
+    if (event.target !== layer) return;
+    if (annotPlacing) {
+      event.preventDefault();
+      const rect = layer.getBoundingClientRect();
+      createAnnot(layer, clampNumber(((event.clientX - rect.left) / rect.width) * 100, 0, 92), clampNumber(((event.clientY - rect.top) / rect.height) * 100, 0, 95));
+      setPlacing(false);
+    } else {
+      selectAnnot(null);
+    }
+  });
+}
+
+function initPdfToolbar() {
+  if (pdfToolbarReady) return;
+  pdfToolbarReady = true;
+  const changeSize = (delta) => {
+    const base = annotSelected ? parseFloat(annotSelected.dataset.size) || annotSize : annotSize;
+    annotSize = clampNumber(Math.round((base + delta) * 10) / 10, 1, 9);
+    if (annotSelected) {
+      annotSelected.dataset.size = String(annotSize);
+      annotSelected.style.fontSize = `${annotSize}cqw`;
+    }
+  };
+  $('#pdf-add-text')?.addEventListener('click', () => setPlacing(!annotPlacing));
+  $('#pdf-size-up')?.addEventListener('click', () => changeSize(0.3));
+  $('#pdf-size-down')?.addEventListener('click', () => changeSize(-0.3));
+  $('#pdf-color')?.addEventListener('input', (event) => {
+    annotColor = event.target.value;
+    if (annotSelected) annotSelected.style.color = annotColor;
+  });
+  $('#pdf-bold')?.addEventListener('click', () => {
+    annotBold = !annotBold;
+    $('#pdf-bold')?.classList.toggle('active', annotBold);
+    if (annotSelected) annotSelected.style.fontWeight = annotBold ? '700' : '400';
+  });
+  $('#pdf-delete')?.addEventListener('click', () => {
+    if (!annotSelected) return;
+    annotSelected.remove();
+    annotSelected = null;
+  });
+  $('#pdf-clear')?.addEventListener('click', () => {
+    if (!document.querySelector('.annot')) return;
+    if (!window.confirm('حذف كل النصوص التي أضفتها على الملف؟')) return;
+    document.querySelectorAll('.annot').forEach((element) => element.remove());
+    annotSelected = null;
+  });
+}
+
 async function renderPdfInto(container, path, license) {
   const token = ++pdfRenderToken;
   const message = (text) => {
@@ -690,34 +776,51 @@ async function renderPdfInto(container, path, license) {
   container.classList.add('is-pdf');
   container.setAttribute('contenteditable', 'false');
   container.dataset.pdfReady = '0';
+  annotSelected = null;
   message('جارٍ تحميل الوثيقة...');
   try {
-    const wmText = await applyWatermark(license);
+    await applyWatermark(license);
     await pdfReady;
     if (!pdfjsLib) throw new Error('pdfjs');
-    const { data: blob, error } = await supabase.storage.from('documents').download(path);
-    if (error || !blob) throw error || new Error('download');
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    let bytes;
+    if (license.signedUrl) {
+      const response = await fetch(license.signedUrl);
+      if (!response.ok) throw new Error('download');
+      bytes = new Uint8Array(await response.arrayBuffer());
+    } else {
+      const { data: blob, error } = await supabase.storage.from('documents').download(path);
+      if (error || !blob) throw error || new Error('download');
+      bytes = new Uint8Array(await blob.arrayBuffer());
+    }
+    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
     if (token !== pdfRenderToken) return;
+    if (pdf.numPages > MAX_PDF_PAGES) {
+      message(`الملف كبير جدًا للعرض (أكثر من ${MAX_PDF_PAGES} صفحة).`);
+      return;
+    }
     const wrap = document.createElement('div');
     wrap.className = 'pdf-pages';
     container.replaceChildren(wrap);
     const cssWidth = Math.min(Math.max(container.clientWidth || 600, 280), 900);
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const pages = Math.min(pdf.numPages, 200);
-    for (let n = 1; n <= pages; n += 1) {
+    const pixelWidth = Math.min(Math.round(cssWidth * Math.min(window.devicePixelRatio || 1, 2)), 1300);
+    for (let n = 1; n <= pdf.numPages; n += 1) {
       const page = await pdf.getPage(n);
       if (token !== pdfRenderToken) return;
       const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: (cssWidth / base.width) * ratio });
+      const viewport = page.getViewport({ scale: pixelWidth / base.width });
+      const pageEl = document.createElement('div');
+      pageEl.className = 'pdf-page';
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
       canvas.setAttribute('role', 'img');
-      canvas.setAttribute('aria-label', `صفحة ${n} من ${pages}`);
-      wrap.appendChild(canvas);
+      canvas.setAttribute('aria-label', `صفحة ${n} من ${pdf.numPages}`);
+      const layer = document.createElement('div');
+      layer.className = 'annot-layer';
+      if (!license.isShop) wireAnnotLayer(layer);
+      pageEl.append(canvas, layer);
+      wrap.appendChild(pageEl);
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      stampCanvas(canvas, wmText, n, pages);
     }
     if (token === pdfRenderToken) container.dataset.pdfReady = '1';
   } catch (_) {
@@ -767,11 +870,12 @@ $('#activation-form')?.addEventListener('submit', async (event) => {
 });
 
 $('#print-button')?.addEventListener('click', async () => {
-  if (!activeLicense || (!activeLicense.isAdmin && activeLicense.remaining_prints <= 0) || !supabase) return;
+  if (!activeLicense || (!activeLicense.isAdmin && !activeLicense.isShop && activeLicense.remaining_prints <= 0) || !supabase) return;
   const button = $('#print-button');
   if (button?.disabled) return;
   if (button) button.disabled = true;
   try {
+    if (!activeLicense.isShop) {
     let authResult;
     try {
       authResult = await supabase.auth.getUser();
@@ -787,26 +891,36 @@ $('#print-button')?.addEventListener('click', async () => {
       return;
     }
     if (authResult.error) throw new Error('تعذر التحقق من جلسة الدخول. حاول مرة أخرى.');
-    if (!activeLicense.document.storage_path) ensureWatermarkOverlay();
-    const wmProblem = watermarkProblem();
-    if (wmProblem) throw new Error(wmProblem);
+    }
+    if (activeLicense.document.storage_path && $('#document-content')?.dataset.pdfReady !== '1') throw new Error('انتظر حتى يكتمل تحميل الملف ثم اطبع.');
     if (activeLicense.isAdmin) {
       const { data: adminCheck } = await supabase.rpc('admin_get_document', { p_id: activeLicense.document_id });
       if (!adminCheck) throw new Error('صلاحية الأدمن غير متاحة. سجّل الدخول من جديد.');
-    } else {
+    } else if (!activeLicense.isShop) {
       activeLicense = await processPrint(activeLicense.license_key, activeLicense.document_id);
       renderCounters(activeLicense);
     }
+    setPlacing(false);
+    selectAnnot(null);
+    if (activeLicense.document.storage_path) {
+      const pageStyle = document.createElement('style');
+      pageStyle.id = 'print-page-style';
+      pageStyle.textContent = '@page { margin: 0; }';
+      document.head.appendChild(pageStyle);
+    }
     document.body.classList.add('authorized-print');
-    setNotice(activeLicense.isAdmin ? 'وضع الأدمن: لم تُخصم أي نسخة. ستُطبع الوثيقة مع علامة مائية باسمك.' : 'تم حجز نسخة الطباعة. ستُطبع الوثيقة مع علامة مائية باسم بريدك ولا تُطبع بدونها.', 'success');
-    const cleanupPrint = () => document.body.classList.remove('authorized-print');
+    setNotice(activeLicense.isAdmin ? 'وضع الأدمن: لم تُخصم أي نسخة. تُطبع الوثيقة بدون العلامة المائية.' : activeLicense.isShop ? 'جارٍ فتح نافذة الطباعة. تُطبع الوثيقة بدون العلامة المائية.' : 'تم حجز نسخة الطباعة. تُطبع الوثيقة بدون العلامة المائية، فهي تظهر على الشاشة فقط.', 'success');
+    const cleanupPrint = () => {
+      document.body.classList.remove('authorized-print');
+      document.getElementById('print-page-style')?.remove();
+    };
     window.addEventListener('afterprint', cleanupPrint, { once: true });
     window.setTimeout(cleanupPrint, 120000);
     window.print();
   } catch (error) {
     setNotice(error.message || 'تعذر تنفيذ الطباعة الآن. حاول مرة أخرى.', 'error');
   } finally {
-    if (button) button.disabled = !activeLicense?.isAdmin && activeLicense?.remaining_prints <= 0;
+    if (button) button.disabled = !activeLicense?.isAdmin && !activeLicense?.isShop && activeLicense?.remaining_prints <= 0;
   }
 });
 
@@ -822,6 +936,10 @@ function renderCounters(license) {
   if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #dbeafe 0deg)`;
   const printBtn = $('#print-button');
   if (printBtn) printBtn.disabled = remaining <= 0;
+  if (remaining <= 0) {
+    $('#shop-open')?.classList.add('is-hidden');
+    $('#shop-hint')?.classList.add('is-hidden');
+  }
 }
 
 class CheckoutError extends Error {}
@@ -1112,6 +1230,7 @@ async function renderPdfPreviewBlob(file) {
   await pdfReady;
   if (!pdfjsLib) throw new Error('pdfjs');
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  if (pdf.numPages > MAX_PDF_PAGES) throw new Error('too_many_pages');
   const page = await pdf.getPage(1);
   const base = page.getViewport({ scale: 1 });
   const viewport = page.getViewport({ scale: 900 / base.width });
@@ -1170,8 +1289,8 @@ $('#admin-pdf')?.addEventListener('change', async (event) => {
     $('#admin-preview-wrap')?.classList.remove('is-hidden');
     if (!$('#admin-title').value.trim()) $('#admin-title').value = file.name.replace(/\.[^.]+$/, '').slice(0, 200);
     setAdminFeedback('');
-  } catch (_) {
-    setAdminFeedback('تعذر قراءة ملف PDF. تأكد أنه غير تالف وغير محمي بكلمة مرور.', 'error');
+  } catch (error) {
+    setAdminFeedback(error?.message === 'too_many_pages' ? `الملف يتجاوز ${MAX_PDF_PAGES} صفحة. قسّمه إلى ملفات أصغر.` : 'تعذر قراءة ملف PDF. تأكد أنه غير تالف وغير محمي بكلمة مرور.', 'error');
     input.value = '';
   }
 });
@@ -1410,6 +1529,123 @@ $('#admin-manage-open')?.addEventListener('click', () => {
 });
 $('#admin-manage-close')?.addEventListener('click', () => $('#admin-manage-dialog')?.close());
 
+// ---------- Print shop codes (customers without a printer) ----------
+const SHOP_ERRORS = {
+  invalid: 'الرمز غير صحيح. تأكد منه وأعد المحاولة.',
+  expired: 'انتهت صلاحية هذا الرمز. اطلب من الزبون رمزًا جديدًا.',
+  exhausted: 'استُعمل هذا الرمز أكثر من الحد المسموح. اطلب رمزًا جديدًا.',
+  no_prints: 'لم تعد لدى الزبون نسخ متبقية لهذه الوثيقة.',
+  document_missing: 'هذه الوثيقة لم تعد متاحة.',
+  rate_limited: 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.'
+};
+
+function formatShopCode(code) {
+  return code.replace(/(.{4})(?=.)/g, '$1-');
+}
+
+function drawQr(canvas, text) {
+  if (!canvas || typeof window.qrcode !== 'function') return false;
+  const qr = window.qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  const count = qr.getModuleCount();
+  const quiet = 4;
+  const cell = 8;
+  const size = (count + quiet * 2) * cell;
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, size, size);
+  context.fillStyle = '#000000';
+  for (let row = 0; row < count; row += 1) {
+    for (let col = 0; col < count; col += 1) {
+      if (qr.isDark(row, col)) context.fillRect((col + quiet) * cell, (row + quiet) * cell, cell, cell);
+    }
+  }
+  return true;
+}
+
+async function copyText(text, feedbackText) {
+  const feedback = $('#shop-feedback');
+  try {
+    await navigator.clipboard.writeText(text);
+    if (feedback) { feedback.textContent = feedbackText; feedback.className = 'auth-feedback success'; }
+  } catch (_) {
+    if (feedback) { feedback.textContent = 'تعذر النسخ تلقائيًا. حدّد النص وانسخه يدويًا.'; feedback.className = 'auth-feedback error'; }
+  }
+}
+
+function showShopDialog(code, expiresAt) {
+  const link = `${location.origin}${location.pathname}?shop=${code}`;
+  $('#shop-code-text').textContent = formatShopCode(code);
+  $('#shop-link').value = link;
+  $('#shop-qr-wrap')?.classList.toggle('is-hidden', !drawQr($('#shop-qr'), link));
+  $('#shop-expiry').textContent = `صالح حتى ${new Date(expiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })}`;
+  if ($('#shop-feedback')) { $('#shop-feedback').textContent = ''; $('#shop-feedback').className = 'auth-feedback'; }
+  $('#shop-dialog')?.showModal();
+}
+
+async function createShopCode() {
+  if (!activeLicense || activeLicense.isAdmin || activeLicense.isShop || !supabase) return;
+  const button = $('#shop-open');
+  if (button) button.disabled = true;
+  try {
+    const { data, error } = await supabase.rpc('create_print_shop_code', { p_license_key: activeLicense.license_key });
+    if (error) throw error;
+    if (data?.status === 'no_prints') setNotice('لا توجد نسخ متبقية في هذا الترخيص.', 'error');
+    else if (data?.status === 'too_many') setNotice('لديك 5 رموز غير مستعملة. استعمل أحدها أو انتظر انتهاءها (24 ساعة).', 'error');
+    else if (data?.status === 'ok') showShopDialog(data.code, data.expires_at);
+    else setNotice('تعذر إنشاء الرمز. حاول مرة أخرى.', 'error');
+  } catch (_) {
+    setNotice('تعذر إنشاء رمز المطبعة الآن. حاول مرة أخرى.', 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function openShopCode(raw) {
+  const code = String(raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z2-9]{16}$/.test(code)) return setNotice(SHOP_ERRORS.invalid, 'error');
+  if (!supabase) return setNotice('تعذر الاتصال بالخدمة. حدّث الصفحة وحاول مرة أخرى.', 'error');
+  setNotice('جارٍ فتح الوثيقة...', 'info');
+  let result;
+  try {
+    result = await supabase.functions.invoke('print-shop', { body: { code } });
+  } catch (_) {
+    return setNotice('تعذر الاتصال بالخدمة. تحقق من الاتصال وأعد المحاولة.', 'error');
+  }
+  const { data, error } = result;
+  if (error || !data) {
+    let status = '';
+    try { status = (await error?.context?.json?.())?.status ?? ''; } catch (_) { /* ignore */ }
+    return setNotice(SHOP_ERRORS[status] || 'تعذر فتح الوثيقة الآن. حاول مرة أخرى.', 'error');
+  }
+  if (data.status !== 'ok') return setNotice(SHOP_ERRORS[data.status] || 'تعذر فتح الوثيقة.', 'error');
+  renderLicense({
+    license_key: 'PRINT-SHOP',
+    document_id: data.document_id,
+    remaining_prints: 0,
+    total_prints: 0,
+    email: data.email ?? '',
+    watermarkTag: 'PRINT-SHOP',
+    isShop: true,
+    shopExpiresAt: data.expires_at,
+    signedUrl: data.signed_url ?? null,
+    document: { title: data.title, content: data.content ?? '', storage_path: data.signed_url ? 'shop' : null, category: 'وثيقة (مطبعة)' }
+  });
+  document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('#shop-open')?.addEventListener('click', createShopCode);
+$('#shop-close')?.addEventListener('click', () => $('#shop-dialog')?.close());
+$('#shop-copy-code')?.addEventListener('click', () => copyText($('#shop-code-text').textContent.replace(/-/g, ''), 'تم نسخ الرمز.'));
+$('#shop-copy-link')?.addEventListener('click', () => copyText($('#shop-link').value, 'تم نسخ الرابط.'));
+$('#shop-entry-form')?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  openShopCode($('#shop-code-input')?.value);
+});
+
 // ---------- Preview lightbox ----------
 $('#preview-close')?.addEventListener('click', () => $('#preview-dialog')?.close());
 $('#preview-dialog')?.addEventListener('click', (event) => { if (event.target === $('#preview-dialog')) $('#preview-dialog')?.close(); });
@@ -1575,3 +1811,9 @@ document.addEventListener('click', (event) => {
 
 window.lucide?.createIcons();
 
+
+// Opened from a print shop QR code: ?shop=XXXX...
+{
+  const shopParam = new URLSearchParams(window.location.search).get('shop');
+  if (shopParam) openShopCode(shopParam);
+}

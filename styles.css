@@ -62,7 +62,7 @@ footer { border-top:1px solid var(--line); width:min(1200px,calc(100% - 56px)); 
 .privacy-dialog { width:min(440px,calc(100% - 32px)); border:1px solid #bfdbfe; border-radius:18px; padding:28px; color:var(--ink); background:#fff; box-shadow:0 25px 80px rgba(15,23,42,.2); direction:rtl; }.privacy-dialog::backdrop { background:rgba(15,23,42,.18); backdrop-filter:blur(3px); }.privacy-dialog h2 { margin:16px 0 10px; font-size:25px; }.privacy-dialog p { color:#475569; line-height:1.9; font-size:14px; }.dialog-icon { width:44px; height:44px; display:grid; place-items:center; border-radius:13px; color:#047857; background:#d1fae5; margin-bottom:20px; }.dialog-icon svg { width:23px; }.dialog-close { position:absolute; top:14px; left:14px; border:0; background:#f1f5f9; color:#64748b; border-radius:8px; width:30px; height:30px; cursor:pointer; }.dialog-close svg { width:16px; }
 
 .paper-watermark { user-select:none; }
-@media print { body.authorized-print .paper-watermark { color:#64748b; opacity:.12; font-size:20px; letter-spacing:1px; transform:rotate(-28deg); white-space:normal; overflow-wrap:anywhere; max-width:80%; } }
+@media print { .paper-watermark, .moire-pattern, #watermark-tiles { display:none !important; } }
 .brand-mark { color:#1d4ed8; background:#dbeafe; box-shadow:4px 4px 0 #bfdbfe; }
 .primary-button, .print-button { color:#12336f; background:#dbeafe; border:1px solid #93c5fd; }
 .primary-button:hover, .print-button:not(:disabled):hover { color:#fff; background:#2563eb; }
@@ -197,7 +197,7 @@ body.capture-blocked .document-paper, body.capture-blocked .document-scene { fil
 /* PDF pages */
 .document-body.is-pdf { max-width:none; padding-top:6px; }
 .pdf-pages canvas { display:block; width:100%; height:auto; margin:0 0 12px; border:1px solid #e2e8f0; background:#fff; }
-@media print { body.authorized-print .pdf-pages canvas { border:0; margin:0; break-after:page; break-inside:avoid; } body.authorized-print .document-body.is-pdf { padding:0; } }
+
 
 /* Editing studio toolbar: visible, sticky, scrolls sideways on phones */
 .editor-toolbar { position:sticky; top:8px; z-index:6; margin:0 0 14px; }
@@ -229,6 +229,64 @@ body.capture-blocked .document-paper, body.capture-blocked .document-scene { fil
 .document-paper { position:relative; }
 #watermark-tiles { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; }
 #watermark-tiles svg { display:block; width:100%; height:100%; }
-@media print { body.authorized-print #watermark-tiles { display:block !important; visibility:visible !important; opacity:1 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+
 .wm-note { display:flex; gap:8px; align-items:flex-start; margin:12px 0 0; padding:10px 12px; border:1px solid #fde68a; border-radius:10px; background:#fffbeb; color:#92400e; font-size:12px; line-height:1.7; }
 .wm-note svg { flex:none; width:16px; height:16px; margin-top:2px; }
+
+/* PDF files: show the file itself, no template decorations */
+.document-paper.pdf-mode { background:transparent; box-shadow:none; border:0; padding:0; }
+.document-paper.pdf-mode .paper-header-strip,
+.document-paper.pdf-mode #document-title,
+.document-paper.pdf-mode .recipient-box,
+.document-paper.pdf-mode .paper-rule,
+.document-paper.pdf-mode .paper-signatures,
+.document-paper.pdf-mode .paper-footer,
+.document-paper.pdf-mode .moire-pattern,
+.document-paper.pdf-mode .paper-watermark { display:none !important; }
+.document-paper.pdf-mode .paper-content { padding:0; }
+.pdf-pages { display:grid; gap:14px; }
+.pdf-page { position:relative; container-type:inline-size; background:#fff; box-shadow:0 2px 14px rgba(15,23,42,.16); }
+.pdf-page canvas { display:block; width:100%; height:auto; margin:0; border:0; }
+.annot-layer { position:absolute; inset:0; z-index:4; }
+body.annot-placing .annot-layer { cursor:crosshair; }
+.annot { position:absolute; z-index:5; min-width:6cqw; max-width:90cqw; padding:0 .25em; border:1px dashed transparent; border-radius:3px; line-height:1.35; direction:rtl; }
+.annot.selected { border-color:#2563eb; background:rgba(37,99,235,.06); }
+.annot-text { min-height:1.3em; outline:none; white-space:pre-wrap; overflow-wrap:anywhere; }
+.annot-handle { position:absolute; top:-24px; inset-inline-start:0; display:none; width:22px; height:22px; border-radius:6px; background:#2563eb; color:#fff; font-size:13px; line-height:22px; text-align:center; cursor:grab; touch-action:none; user-select:none; }
+.annot.selected .annot-handle, .annot:hover .annot-handle { display:block; }
+.pdf-toolbar { display:grid; gap:8px; }
+.pdf-toolbar.is-hidden { display:none !important; }
+.pdf-toolbar .toolbar-btn.wide { width:auto; padding:0 12px; gap:6px; display:inline-flex; align-items:center; font:600 12px 'Tajawal',sans-serif; }
+.pdf-toolbar .toolbar-btn.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+.pdf-toolbar input[type="color"] { width:36px; height:36px; padding:2px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; cursor:pointer; }
+.pdf-hint { margin:0; color:#64748b; font-size:12px; line-height:1.7; }
+@media print {
+  body.authorized-print .document-paper.pdf-mode { padding:0; margin:0; box-shadow:none; background:#fff; }
+  body.authorized-print .pdf-pages { display:block; gap:0; }
+  body.authorized-print .pdf-page { box-shadow:none; break-after:page; page-break-after:always; break-inside:avoid; }
+  body.authorized-print .pdf-page:last-child { break-after:auto; page-break-after:auto; }
+  body.authorized-print .annot { border-color:transparent !important; background:none !important; }
+  body.authorized-print .annot-handle { display:none !important; }
+}
+
+/* Print shop */
+.shop-button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:12px; padding:12px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#1d4ed8; font:700 14px 'Tajawal',sans-serif; cursor:pointer; }
+.shop-button:hover { background:#dbeafe; }
+.shop-button:disabled { opacity:.6; cursor:wait; }
+.shop-button.is-hidden, .shop-hint.is-hidden { display:none !important; }
+.shop-hint { margin:8px 0 0; color:#64748b; font-size:12px; line-height:1.7; }
+.shop-dialog { width:min(440px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:auto; }
+.shop-qr-wrap { display:flex; justify-content:center; margin:14px 0 8px; }
+.shop-qr-wrap.is-hidden { display:none; }
+.shop-qr-wrap canvas { width:min(240px,100%); height:auto; padding:8px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; }
+.shop-code { margin:6px 0 2px; text-align:center; font:700 20px/1.6 'Courier New',monospace; letter-spacing:2px; color:#0f172a; direction:ltr; }
+.shop-expiry { display:block; margin-bottom:10px; text-align:center; color:#64748b; font-size:12px; }
+.shop-dialog input[readonly] { font-size:12px; }
+.shop-actions { display:flex; gap:8px; margin:10px 0; }
+.shop-actions .admin-mini { flex:1; }
+.shop-notes { margin:8px 0 0; padding-inline-start:18px; color:#475569; font-size:12px; line-height:1.9; }
+.shop-entry { margin-top:14px; padding:12px 14px; border:1px dashed #bfdbfe; border-radius:12px; background:#f8fbff; }
+.shop-entry label { display:block; margin-bottom:8px; color:#475569; font-size:12px; }
+.shop-entry-row { display:flex; gap:8px; }
+.shop-entry-row input { flex:1; min-width:0; padding:10px 12px; border:1px solid #cbd5e1; border-radius:9px; font:14px 'Courier New',monospace; letter-spacing:1px; }
+.shop-entry-btn { flex:none; padding:0 16px; }
