@@ -1,0 +1,41 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; media-src 'self' data: blob:; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://epislkcmkneyqmonzias.supabase.co; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://epislkcmkneyqmonzias.supabase.co https://unpkg.com https://esm.sh https://cdn.jsdelivr.net https://challenges.cloudflare.com; worker-src 'self' blob:; frame-src https://epislkcmkneyqmonzias.supabase.co https://challenges.cloudflare.com; upgrade-insecure-requests; frame-ancestors 'none';"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), interest-cohort=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
+        }
+      ]
+    }
+  ]
+}

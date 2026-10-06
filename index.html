@@ -5,22 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f8fafc" />
   <meta name="description" content="منصة آمنة للتحقق من تراخيص المستندات والطباعة الرقمية" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' data: blob:; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://epislkcmkneyqmonzias.supabase.co; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://epislkcmkneyqmonzias.supabase.co https://unpkg.com https://esm.sh https://cdn.jsdelivr.net https://challenges.cloudflare.com; worker-src 'self' blob:; frame-src https://epislkcmkneyqmonzias.supabase.co https://challenges.cloudflare.com;" />
-  <script>
-    if (window.location.hostname === 'mancefkhelili-droid.github.io') {
-      const redirectUrl = new URL('https://medad-eta.vercel.app/');
-      redirectUrl.search = window.location.search;
-      redirectUrl.hash = window.location.hash;
-      window.location.replace(redirectUrl.href);
-    }
-  </script>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' data: blob:; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://esm.sh https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://epislkcmkneyqmonzias.supabase.co; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://epislkcmkneyqmonzias.supabase.co https://unpkg.com https://esm.sh https://cdn.jsdelivr.net https://challenges.cloudflare.com; worker-src 'self' blob:; frame-src https://epislkcmkneyqmonzias.supabase.co https://challenges.cloudflare.com; upgrade-insecure-requests;" />
+  <meta name="referrer" content="strict-origin" />
+  <script src="boot.js"></script>
   <title>مِداد | ترخيص الطباعة الآمنة</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=25" />
 </head>
 <body>
   <header class="topbar">
@@ -116,6 +109,8 @@
             <span class="edit-mode-badge is-hidden" id="edit-mode-badge"><i data-lucide="sparkles"></i> وضع التحرير التفاعلي مفعل</span>
             <span class="viewer-id">DOC-<span id="doc-id">••••••</span></span>
           </div>
+
+          <p class="wm-screen-note"><i data-lucide="shield-alert"></i><span>العلامة المائية (بريدك + رمز الترخيص) تظهر على الشاشة فقط لحماية الوثيقة من التصوير، <strong>ولن تُطبع على الورق</strong>.</span></p>
 
           <!-- شريط أدوات التحرير والتنسيق التفاعلي الشامل -->
           <div class="editor-toolbar is-hidden" id="editor-toolbar" aria-label="أدوات التنسيق والتعديل الكامل">
@@ -330,6 +325,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
   <script src="qr.js"></script>
-  <script type="module" src="app.js?v=28"></script>
+  <script type="module" src="app.js?v=30"></script>
 </body>
 </html>

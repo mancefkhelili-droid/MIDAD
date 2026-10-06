@@ -331,3 +331,30 @@ html[data-theme="dark"]{background:#fff;filter:invert(1) hue-rotate(180deg)}
 html[data-theme="dark"] :is(img,video,canvas):not(.document-paper *),html[data-theme="dark"] .document-paper{filter:invert(1) hue-rotate(180deg)}
 @media print{html[data-theme="dark"],html[data-theme="dark"] :is(img,canvas),html[data-theme="dark"] .document-paper{filter:none!important}}
 .oauth-buttons{margin-top:6px}
+
+
+/* ---------- Header on phones: no overlap between brand, theme toggle and the account/e-mail button ---------- */
+@media (max-width:760px){
+  .topbar{height:auto;min-height:72px;padding:10px 0;flex-wrap:wrap;gap:10px}
+  .brand{flex:none}
+  .brand small{display:none}
+  .header-actions{flex:1 1 0;min-width:0;justify-content:flex-end}
+  .user-profile{flex:1 1 auto;min-width:0;max-width:260px}
+  .profile-trigger{width:100%;min-width:0;padding:6px 8px}
+  .profile-trigger-info{flex:1 1 auto;min-width:0}
+  .profile-trigger-name,.profile-trigger-email{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .profile-trigger-name{line-height:1.2}
+  .profile-trigger-email{line-height:1.3;text-align:start}
+  .profile-dropdown{left:auto;right:0;min-width:min(260px,calc(100vw - 32px))}
+}
+
+/* ---------- Plans: clear states (loading / empty / error) ---------- */
+.plans-msg{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 18px;border:1px dashed #cbd5e1;border-radius:16px;background:rgba(241,245,249,.7);text-align:center}
+.plans-msg p{margin:0;color:#475569;font-size:15px;line-height:1.8;font-weight:600}
+.plan-card h3{font-size:1.15rem}
+.plan-card .primary-button{min-height:48px;margin-top:auto}
+
+/* ---------- Watermark notice above the document ---------- */
+.wm-screen-note{direction:rtl;display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;padding:10px 12px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb;color:#92400e;font-size:12.5px;line-height:1.7}
+.wm-screen-note svg{flex:none;width:16px;height:16px;margin-top:3px}
+@media print{.wm-screen-note{display:none!important}}

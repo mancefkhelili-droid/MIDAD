@@ -678,18 +678,27 @@ function ensureWatermarkOverlay() {
   const defs = document.createElementNS(NS, 'defs');
   const pattern = document.createElementNS(NS, 'pattern');
   pattern.setAttribute('id', 'wm-pattern');
-  pattern.setAttribute('width', '420');
-  pattern.setAttribute('height', '170');
+  const tileW = Math.max(420, Math.round(watermarkText.length * 12 + 90));
+  pattern.setAttribute('width', String(tileW));
+  pattern.setAttribute('height', '150');
   pattern.setAttribute('patternUnits', 'userSpaceOnUse');
   pattern.setAttribute('patternTransform', 'rotate(-28)');
   const label = document.createElementNS(NS, 'text');
-  label.setAttribute('x', '14');
-  label.setAttribute('y', '90');
-  label.setAttribute('font-size', '15');
-  label.setAttribute('font-weight', '600');
+  // The page is RTL: without direction=ltr + centered anchor the text runs out of the tile and gets clipped.
+  label.setAttribute('direction', 'ltr');
+  label.setAttribute('text-anchor', 'middle');
+  label.setAttribute('x', String(tileW / 2));
+  label.setAttribute('y', '80');
+  label.setAttribute('font-size', '17');
+  label.setAttribute('font-weight', '700');
   label.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-  label.setAttribute('fill', '#1e293b');
-  label.setAttribute('fill-opacity', '0.17');
+  label.setAttribute('fill', '#0f172a');
+  label.setAttribute('fill-opacity', '0.26');
+  label.setAttribute('stroke', '#ffffff');
+  label.setAttribute('stroke-opacity', '0.55');
+  label.setAttribute('stroke-width', '3');
+  label.setAttribute('paint-order', 'stroke');
+  label.style.unicodeBidi = 'plaintext';
   label.textContent = watermarkText;
   pattern.appendChild(label);
   defs.appendChild(pattern);
@@ -1048,16 +1057,38 @@ function renderCounters(license) {
 const copiesAvailable = (summary, sheets) => (summary?.unlimited ? 100 : Math.floor(Number(summary?.remaining ?? 0) / Math.max(1, Number(sheets) || 1)));
 const subMaxCopies = (license) => Math.max(1, Math.min(100, copiesAvailable(license.summary ?? subSummary, license.sheets)));
 
+function setPlansMessage(text, retry = false) {
+  const grid = $('#plans-grid');
+  if (!grid) return;
+  grid.replaceChildren();
+  const box = document.createElement('div');
+  box.className = 'plans-msg';
+  const p = document.createElement('p');
+  p.textContent = text;
+  box.append(p);
+  if (retry) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'card-extra-btn';
+    b.textContent = 'إعادة المحاولة';
+    b.addEventListener('click', loadPlans);
+    box.append(b);
+  }
+  grid.append(box);
+}
+
 async function loadPlans() {
   const grid = $('#plans-grid');
   if (!grid || !supabase) return;
+  setPlansMessage('جارٍ تحميل الباقات...');
   try {
-    const { data, error } = await supabase.from('plans').select('*').eq('is_active', true).order('price', { ascending: true });
-    if (error || !data?.length) { grid.textContent = 'الباقات غير متاحة الآن.'; return; }
+    const { data, error } = await supabase.from('plans').select('*').eq('active', true).order('sort', { ascending: true });
+    if (error) { setPlansMessage('تعذر تحميل الباقات. تحقق من اتصالك ثم أعد المحاولة.', true); return; }
+    if (!data?.length) { setPlansMessage('لا توجد باقات متاحة حاليًا. ستظهر هنا فور إضافتها.'); return; }
     plans = data;
     renderPlans();
   } catch (_) {
-    grid.textContent = 'تعذر تحميل الباقات. حدّث الصفحة.';
+    setPlansMessage('تعذر تحميل الباقات. حدّث الصفحة.', true);
   }
 }
 
@@ -1078,9 +1109,9 @@ function renderPlans() {
     price.append(per);
     const sheets = document.createElement('p');
     sheets.className = 'plan-sheets';
-    const base = plan.sheets ?? plan.sheets_total ?? plan.base_sheets;
-    const bonus = Number(plan.bonus_sheets ?? plan.bonus ?? 0);
-    sheets.textContent = base == null ? 'طباعة غير محدودة' : `${Number(base) + bonus} ورقة${bonus ? ` (${Number(base)} + ${bonus} هدية)` : ''}`;
+    const base = plan.sheets_base;
+    const bonus = Number(plan.sheets_bonus ?? 0);
+    sheets.textContent = base == null ? 'طباعة غير محدودة' : `${Number(base) + bonus} ورقة${bonus ? ` (${Number(base)} + ${bonus} هدية)` : ''} / شهر`;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'primary-button full-button';
@@ -2213,7 +2244,11 @@ window.lucide?.createIcons();
 // Opened from a print shop QR code: ?shop=XXXX...
 {
   const shopParam = new URLSearchParams(window.location.search).get('shop');
-  if (shopParam) openShopCode(shopParam);
+  if (shopParam) {
+    // Remove the code from the address bar/history right away so it is not leaked via screenshots, history or sharing.
+    try { history.replaceState(null, '', window.location.pathname); } catch (_) { /* ignore */ }
+    openShopCode(shopParam);
+  }
 }
 
 // ---------- Dark mode ----------
@@ -2230,3 +2265,25 @@ $('#theme-toggle')?.addEventListener('click', () => {
   applyTheme(next);
 });
 applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+
+
+// ---------- Extra protection of the on-screen document (deterrents; real enforcement is server-side) ----------
+{
+  const inProtectedPaper = (target) => {
+    const el = target instanceof Element ? target : target?.parentElement;
+    if (!el) return false;
+    if (el.closest('input, textarea, [contenteditable="true"], .annot-text')) return false;
+    return Boolean(el.closest('#document-paper'));
+  };
+  ['contextmenu', 'dragstart', 'copy', 'cut', 'selectstart'].forEach((type) => {
+    document.addEventListener(type, (event) => { if (inProtectedPaper(event.target)) event.preventDefault(); }, true);
+  });
+  document.addEventListener('keydown', (event) => {
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && ['s', 'u'].includes(event.key.toLowerCase()) && !event.target.closest?.('input, textarea')) event.preventDefault();
+    if (event.key === 'F12' || (mod && event.shiftKey && ['i', 'j', 'c'].includes(event.key.toLowerCase()))) event.preventDefault();
+  }, true);
+  const style = document.createElement('style');
+  style.textContent = '#document-paper .pdf-page canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}';
+  document.head.append(style);
+}
