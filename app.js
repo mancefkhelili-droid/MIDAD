@@ -30,6 +30,10 @@ let pendingReturnStatus = new URLSearchParams(window.location.search).get('statu
 const PENDING_PURCHASE_KEY = 'pending-purchase';
 let isAdmin = false;
 let adminCheckedFor = null;
+let currentUser = null;
+let plans = [];
+let subSummary = null;
+let trialClaimed = true;
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => registration.unregister()));
@@ -53,10 +57,63 @@ function restorePendingPurchase() {
 }
 
 const $ = (selector) => document.querySelector(selector);
+
+// Cloudflare Turnstile (free CAPTCHA). Paste your SITE key here (the public one).
+// Leave it empty to run without CAPTCHA. Enable it in Supabase only AFTER filling this in.
+const TURNSTILE_SITE_KEY = '';
+let captchaToken = '';
+let captchaWidgetId = null;
+let turnstileLoading = null;
+
+function loadTurnstile() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (turnstileLoading) return turnstileLoading;
+  turnstileLoading = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(window.turnstile);
+    script.onerror = () => { turnstileLoading = null; reject(new Error('turnstile')); };
+    document.head.appendChild(script);
+  });
+  return turnstileLoading;
+}
+
+async function setupCaptcha(mode) {
+  const box = $('#captcha-box');
+  if (!box) return;
+  const needed = Boolean(TURNSTILE_SITE_KEY) && mode !== 'reset';
+  box.classList.toggle('is-hidden', !needed);
+  if (!needed) return;
+  try {
+    const turnstile = await loadTurnstile();
+    if (captchaWidgetId === null) {
+      captchaWidgetId = turnstile.render(box, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: 'light',
+        language: 'ar',
+        callback: (token) => { captchaToken = token; },
+        'expired-callback': () => { captchaToken = ''; },
+        'error-callback': () => { captchaToken = ''; }
+      });
+    } else {
+      captchaToken = '';
+      turnstile.reset(captchaWidgetId);
+    }
+  } catch (_) {
+    setAuthFeedback('تعذر تحميل التحقق البشري. تحقق من الاتصال ثم حدّث الصفحة.', 'error');
+  }
+}
+
+function resetCaptcha() {
+  captchaToken = '';
+  if (captchaWidgetId !== null && window.turnstile) window.turnstile.reset(captchaWidgetId);
+}
 let activeLicense = null;
 
-function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', summary = '', previewUrl = '') {
-  documentCatalog[id] = { title, price: Number(price), category, document_id: id, summary, previewUrl };
+function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', summary = '', previewUrl = '', sheets = 1) {
+  documentCatalog[id] = { title, price: Number(price), category, document_id: id, summary, previewUrl, sheets: Number(sheets) || 1 };
   const existingCard = document.querySelector(`.catalog-card[data-document="${id}"]`);
   if (existingCard) existingCard.remove();
   const card = document.createElement('article');
@@ -113,10 +170,13 @@ function addDocumentCardToCatalog(id, title, price, category = 'وثيقة مع�
   buyIcon.dataset.lucide = 'arrow-left';
   buyButton.append(buyIcon);
   footer.append(priceLabel, buyButton);
-  body.append(type, heading, description, footer);
+  const extra = document.createElement('div');
+  extra.className = 'card-extra';
+  body.append(type, heading, description, footer, extra);
   card.append(preview, body);
   $('.document-catalog')?.appendChild(card);
   buyButton.addEventListener('click', () => openPurchase(id));
+  updateCardActions();
   window.lucide?.createIcons();
 }
 
@@ -140,7 +200,7 @@ async function loadCatalogFromSupabase() {
     return;
   }
   try {
-    const { data: docs, error } = await supabase.from('documents').select('id, title, summary, price_per_copy, preview_path, is_published').eq('is_published', true).order('created_at', { ascending: false });
+    const { data: docs, error } = await supabase.from('documents').select('id, title, summary, price_per_copy, preview_path, is_published, sheets').eq('is_published', true).order('created_at', { ascending: false });
     if (error || !docs) {
       catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
       return;
@@ -152,7 +212,7 @@ async function loadCatalogFromSupabase() {
     }
     docs.forEach((doc) => {
       const previewUrl = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
-      addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.summary || '', previewUrl);
+      addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.summary || '', previewUrl, doc.sheets);
     });
   } catch (_) {
     catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
@@ -162,11 +222,14 @@ async function loadCatalogFromSupabase() {
 function renderAccount(user) {
   const loginTrigger = $('#login-trigger');
   const userProfile = $('#user-profile');
+  const userChanged = (user?.id ?? null) !== (currentUser?.id ?? null);
+  currentUser = user ?? null;
   if (!user) {
     loginTrigger?.classList.remove('is-hidden');
     userProfile?.classList.add('is-hidden');
     closeProfileDropdown();
     refreshAdminState(null);
+    refreshSubscription(null);
     return;
   }
   loginTrigger?.classList.add('is-hidden');
@@ -188,6 +251,7 @@ function renderAccount(user) {
   if ($('#profile-provider')) $('#profile-provider').textContent = provider === 'google' ? 'Google' : provider === 'github' ? 'GitHub' : 'البريد الإلكتروني';
   if ($('#profile-role')) $('#profile-role').textContent = 'مشتري';
   refreshAdminState(user);
+  if (userChanged) refreshSubscription(user);
 }
 
 function openProfileDropdown() {
@@ -228,7 +292,7 @@ async function loadAccountHistory() {
   licensesList.textContent = 'جارٍ تحميل التراخيص...';
   try {
     const [orderResult, licenseResult] = await Promise.all([
-      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,document_id').order('created_at', { ascending: false }),
+      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,document_id,plan').order('created_at', { ascending: false }),
       supabase.from('print_licenses').select('id,license_key,document_id,remaining_prints,order_id').order('created_at', { ascending: false })
     ]);
     const titles = await fetchDocumentTitles([...(orderResult.data ?? []).map((o) => o.document_id), ...(licenseResult.data ?? []).map((l) => l.document_id)]);
@@ -246,12 +310,14 @@ async function loadAccountHistory() {
         const top = document.createElement('div');
         top.className = 'order-item-top';
         const title = document.createElement('span');
-        title.textContent = titles[order.document_id] ?? 'وثيقة غير متاحة';
+        title.textContent = order.plan ? `اشتراك ${plans.find((p) => p.code === order.plan)?.name ?? ''}`.trim() : (titles[order.document_id] ?? 'وثيقة غير متاحة');
         const state = document.createElement('span');
         state.textContent = status;
         top.append(title, state);
         const details = document.createElement('small');
-        details.textContent = `${order.copies_count} نسخة / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`;
+        details.textContent = order.plan
+          ? `اشتراك شهري / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`
+          : `${order.copies_count} نسخة / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`;
         article.append(top, details);
         return article;
       }));
@@ -506,6 +572,8 @@ function renderLicense(license) {
   applyWatermark(license);
   if (contentEl && isPdf) renderPdfInto(contentEl, license.document.storage_path, license);
   else if (contentEl) contentEl.setAttribute('contenteditable', license.isShop ? 'false' : 'true');
+  if ($('#counter-unit')) $('#counter-unit').textContent = 'نسخة متبقية';
+  if ($('#counter-total-unit')) $('#counter-total-unit').textContent = 'طبعات';
 
   if ($('#prints-remaining')) $('#prints-remaining').textContent = remaining;
   if ($('#prints-used')) $('#prints-used').textContent = used;
@@ -516,10 +584,10 @@ function renderLicense(license) {
   const stateEl = $('#license-state');
   if (stateEl) {
     stateEl.classList.add('active');
-    stateEl.innerHTML = license.isAdmin ? '<span class="state-dot"></span> وضع الأدمن' : license.isShop ? '<span class="state-dot"></span> وضع المطبعة' : '<span class="state-dot"></span> مفعل الآن';
+    stateEl.innerHTML = license.isAdmin ? '<span class="state-dot"></span> وضع الأدمن' : license.isSub ? '<span class="state-dot"></span> اشتراك فعّال' : license.isShop ? '<span class="state-dot"></span> وضع المطبعة' : '<span class="state-dot"></span> مفعل الآن';
   }
-  if (license.isAdmin || license.isShop) {
-    const symbol = license.isShop ? '—' : '∞';
+  if (license.isAdmin) {
+    const symbol = '∞';
     if ($('#prints-remaining')) $('#prints-remaining').textContent = symbol;
     if ($('#prints-used')) $('#prints-used').textContent = '0';
     if ($('#total-prints')) $('#total-prints').textContent = symbol;
@@ -529,14 +597,16 @@ function renderLicense(license) {
   }
   
   const printBtn = $('#print-button');
-  if (printBtn) printBtn.disabled = !(license.isAdmin || license.isShop) && remaining <= 0;
+  if (printBtn) printBtn.disabled = !license.isAdmin && remaining <= 0;
   const canShop = !license.isAdmin && !license.isShop && remaining > 0;
   $('#shop-open')?.classList.toggle('is-hidden', !canShop);
   $('#shop-hint')?.classList.toggle('is-hidden', !canShop);
   
+  if (license.isSub) renderSubCounters(license);
   const wmInfo = 'العلامة المائية باسم بريدك تظهر على الشاشة فقط ولن تُطبع.';
   if (license.isAdmin) setNotice(`وضع الأدمن: تعرض وتطبع أي وثيقة بدون دفع وبدون خصم نسخ. ${wmInfo}`, 'info');
-  else if (license.isShop) setNotice(`وضع المطبعة: الوثيقة جاهزة للطباعة${license.shopExpiresAt ? ` (الرمز صالح حتى ${new Date(license.shopExpiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })})` : ''}. ${wmInfo}`, 'success');
+  else if (license.isSub) setNotice(`تم فتح الوثيقة من اشتراكك. كل طباعة تخصم ${license.sheets} ورقة من رصيدك. ${wmInfo}`, 'success');
+  else if (license.isShop) setNotice(`وضع المطبعة: فتح الوثيقة لا يخصم شيئًا، وتُخصم نسخة واحدة من ترخيص الزبون عند كل طباعة (المتبقي ${remaining})${license.shopExpiresAt ? ` ، والرمز صالح حتى ${new Date(license.shopExpiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}. ${wmInfo}`, 'success');
   else setNotice(isPdf ? `تم تفعيل المستند. أضف نصًا فوق الملف أينما تريد من شريط الأدوات ثم اطبع. ${wmInfo}` : `تم تفعيل المستند بنجاح. يمكنك تعديله قبل الطباعة. ${wmInfo}`, 'success');
   window.lucide?.createIcons();
 }
@@ -828,6 +898,27 @@ async function renderPdfInto(container, path, license) {
   }
 }
 
+// Print ONLY the document: hide every element that is not the paper or one of its ancestors.
+function preparePrintLayout() {
+  const paper = $('#document-paper');
+  const touched = [];
+  let node = paper;
+  while (node && node !== document.body && node.parentElement) {
+    const parent = node.parentElement;
+    if (node !== paper) {
+      node.classList.add('print-keep');
+      touched.push([node, 'print-keep']);
+    }
+    for (const sibling of parent.children) {
+      if (sibling === node || ['SCRIPT', 'STYLE', 'LINK', 'META'].includes(sibling.tagName)) continue;
+      sibling.classList.add('print-hide');
+      touched.push([sibling, 'print-hide']);
+    }
+    node = parent;
+  }
+  return () => touched.forEach(([element, className]) => element.classList.remove(className));
+}
+
 async function processPrint(licenseKey, documentId) {
   if (!supabase) throw new Error('يجب إعداد Supabase أولًا.');
   let result;
@@ -870,7 +961,7 @@ $('#activation-form')?.addEventListener('submit', async (event) => {
 });
 
 $('#print-button')?.addEventListener('click', async () => {
-  if (!activeLicense || (!activeLicense.isAdmin && !activeLicense.isShop && activeLicense.remaining_prints <= 0) || !supabase) return;
+  if (!activeLicense || (!activeLicense.isAdmin && activeLicense.remaining_prints <= 0) || !supabase) return;
   const button = $('#print-button');
   if (button?.disabled) return;
   if (button) button.disabled = true;
@@ -896,12 +987,20 @@ $('#print-button')?.addEventListener('click', async () => {
     if (activeLicense.isAdmin) {
       const { data: adminCheck } = await supabase.rpc('admin_get_document', { p_id: activeLicense.document_id });
       if (!adminCheck) throw new Error('صلاحية الأدمن غير متاحة. سجّل الدخول من جديد.');
-    } else if (!activeLicense.isShop) {
+    } else if (activeLicense.isShop) {
+      const printed = await callPrintShop({ code: shopCode, action: 'print' });
+      activeLicense = { ...activeLicense, remaining_prints: Number(printed.copies_left) };
+      renderCounters(activeLicense);
+    } else if (activeLicense.isSub) {
+      activeLicense = await processSubPrint(activeLicense);
+      renderCounters(activeLicense);
+    } else {
       activeLicense = await processPrint(activeLicense.license_key, activeLicense.document_id);
       renderCounters(activeLicense);
     }
     setPlacing(false);
     selectAnnot(null);
+    const restoreLayout = preparePrintLayout();
     if (activeLicense.document.storage_path) {
       const pageStyle = document.createElement('style');
       pageStyle.id = 'print-page-style';
@@ -909,23 +1008,25 @@ $('#print-button')?.addEventListener('click', async () => {
       document.head.appendChild(pageStyle);
     }
     document.body.classList.add('authorized-print');
-    setNotice(activeLicense.isAdmin ? 'وضع الأدمن: لم تُخصم أي نسخة. تُطبع الوثيقة بدون العلامة المائية.' : activeLicense.isShop ? 'جارٍ فتح نافذة الطباعة. تُطبع الوثيقة بدون العلامة المائية.' : 'تم حجز نسخة الطباعة. تُطبع الوثيقة بدون العلامة المائية، فهي تظهر على الشاشة فقط.', 'success');
+    setNotice(activeLicense.isAdmin ? 'وضع الأدمن: لم تُخصم أي نسخة. تُطبع الوثيقة بدون العلامة المائية.' : activeLicense.isShop ? `خُصمت نسخة من ترخيص الزبون (المتبقي ${activeLicense.remaining_prints}). تُطبع الوثيقة بدون العلامة المائية.` : 'تم حجز نسخة الطباعة. تُطبع الوثيقة بدون العلامة المائية، فهي تظهر على الشاشة فقط.', 'success');
     const cleanupPrint = () => {
       document.body.classList.remove('authorized-print');
       document.getElementById('print-page-style')?.remove();
+      restoreLayout();
     };
     window.addEventListener('afterprint', cleanupPrint, { once: true });
-    window.setTimeout(cleanupPrint, 120000);
+    window.setTimeout(cleanupPrint, 300000);
     window.print();
   } catch (error) {
     setNotice(error.message || 'تعذر تنفيذ الطباعة الآن. حاول مرة أخرى.', 'error');
   } finally {
-    if (button) button.disabled = !activeLicense?.isAdmin && !activeLicense?.isShop && activeLicense?.remaining_prints <= 0;
+    if (button) button.disabled = !activeLicense?.isAdmin && activeLicense?.remaining_prints <= 0;
   }
 });
 
 // Updates only the counters (never rebuilds the document, so the user's edits are kept).
 function renderCounters(license) {
+  if (license.isSub) { renderSubCounters(license); return; }
   const remaining = Math.max(0, Number(license.remaining_prints));
   const total = Math.max(remaining, Number(license.total_prints ?? remaining));
   const used = total - remaining;
@@ -942,14 +1043,270 @@ function renderCounters(license) {
   }
 }
 
+
+// ---------- Subscriptions, free trial, shop copies ----------
+const copiesAvailable = (summary, sheets) => (summary?.unlimited ? 100 : Math.floor(Number(summary?.remaining ?? 0) / Math.max(1, Number(sheets) || 1)));
+const subMaxCopies = (license) => Math.max(1, Math.min(100, copiesAvailable(license.summary ?? subSummary, license.sheets)));
+
+async function loadPlans() {
+  const grid = $('#plans-grid');
+  if (!grid || !supabase) return;
+  try {
+    const { data, error } = await supabase.from('plans').select('*').eq('is_active', true).order('price', { ascending: true });
+    if (error || !data?.length) { grid.textContent = 'الباقات غير متاحة الآن.'; return; }
+    plans = data;
+    renderPlans();
+  } catch (_) {
+    grid.textContent = 'تعذر تحميل الباقات. حدّث الصفحة.';
+  }
+}
+
+function renderPlans() {
+  const grid = $('#plans-grid');
+  if (!grid) return;
+  grid.replaceChildren();
+  plans.forEach((plan, index) => {
+    const card = document.createElement('article');
+    card.className = `plan-card${index === 1 ? ' featured' : ''}`;
+    const name = document.createElement('h3');
+    name.textContent = plan.name;
+    const price = document.createElement('div');
+    price.className = 'plan-price';
+    price.textContent = `${Number(plan.price)} دج`;
+    const per = document.createElement('small');
+    per.textContent = ' / شهر';
+    price.append(per);
+    const sheets = document.createElement('p');
+    sheets.className = 'plan-sheets';
+    const base = plan.sheets ?? plan.sheets_total ?? plan.base_sheets;
+    const bonus = Number(plan.bonus_sheets ?? plan.bonus ?? 0);
+    sheets.textContent = base == null ? 'طباعة غير محدودة' : `${Number(base) + bonus} ورقة${bonus ? ` (${Number(base)} + ${bonus} هدية)` : ''}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'primary-button full-button';
+    button.textContent = `اشترك بـ ${Number(plan.price)} دج`;
+    button.addEventListener('click', () => subscribeToPlan(plan.code));
+    card.append(name, price, sheets, button);
+    grid.append(card);
+  });
+}
+
+async function subscribeToPlan(code) {
+  if (!supabase) return;
+  let user = null;
+  try { ({ data: { user } } = await supabase.auth.getUser()); } catch (_) {}
+  if (!user) {
+    savePendingPurchase({ planCode: code });
+    openAuthDialog('login');
+    return;
+  }
+  setNotice('جارٍ تحويلك إلى صفحة الدفع...', 'info');
+  try {
+    await startCheckout(null, null, code);
+  } catch (error) {
+    setNotice(error.message, 'error');
+  }
+}
+
+async function refreshSubscription(user) {
+  if (!user || !supabase) {
+    subSummary = null;
+    trialClaimed = false;
+  } else {
+    try {
+      const [sub, trial] = await Promise.all([supabase.rpc('my_subscription'), supabase.rpc('my_trial_status')]);
+      subSummary = sub.error ? null : sub.data;
+      trialClaimed = trial.error ? true : Boolean(trial.data?.claimed);
+    } catch (_) {
+      subSummary = null;
+    }
+  }
+  renderSubscriptionStatus();
+  updateCardActions();
+}
+
+function renderSubscriptionStatus() {
+  const banner = $('#trial-banner');
+  const status = $('#sub-status');
+  if (banner) {
+    const show = !currentUser || !trialClaimed;
+    banner.classList.toggle('is-hidden', !show);
+    banner.textContent = show ? '🎁 نسخة واحدة مجانية لكل مستخدم جديد — اختر أي وثيقة من المكتبة وجرّبها.' : '';
+  }
+  if (status) {
+    const sm = subSummary;
+    if (sm?.has_subscription) {
+      const until = sm.expires_at ? new Date(sm.expires_at).toLocaleDateString('ar-DZ', { dateStyle: 'medium' }) : '';
+      status.textContent = `اشتراكك فعّال: ${sm.unlimited ? 'طباعة غير محدودة' : `${sm.remaining} ورقة متبقية`}${until ? ` • ينتهي ${until}` : ''}`;
+      status.classList.remove('is-hidden');
+    } else {
+      status.textContent = '';
+      status.classList.add('is-hidden');
+    }
+  }
+}
+
+function updateCardActions() {
+  document.querySelectorAll('.catalog-card .card-extra').forEach((extra) => {
+    const id = extra.closest('[data-document]')?.dataset.document;
+    if (!id || !documentCatalog[id]) return;
+    extra.replaceChildren();
+    const info = document.createElement('span');
+    info.className = 'card-sheets';
+    info.textContent = `${documentCatalog[id].sheets} ورقة`;
+    extra.append(info);
+    if (subSummary?.active) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'card-extra-btn';
+      b.textContent = 'افتح بالاشتراك';
+      b.addEventListener('click', () => openWithSubscription(id));
+      extra.append(b);
+    }
+    if (!currentUser || !trialClaimed) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'card-extra-btn';
+      b.textContent = 'جرّب مجانًا (نسخة واحدة)';
+      b.addEventListener('click', () => claimTrial(id));
+      extra.append(b);
+    }
+  });
+}
+
+async function claimTrial(documentId) {
+  if (!supabase || !documentCatalog[documentId]) return;
+  let user = null;
+  try { ({ data: { user } } = await supabase.auth.getUser()); } catch (_) {}
+  if (!user) {
+    setNotice('سجّل الدخول أو أنشئ حسابًا لتحصل على نسختك المجانية.', 'info');
+    openAuthDialog('signup');
+    return;
+  }
+  if (!window.confirm(`ستستعمل نسختك المجانية الوحيدة على «${documentCatalog[documentId].title}». متأكد؟`)) return;
+  try {
+    const { data, error } = await supabase.rpc('claim_trial', { p_document_id: documentId });
+    if (error) throw error;
+    if (data?.status === 'already_claimed') { trialClaimed = true; renderSubscriptionStatus(); updateCardActions(); return setNotice('استعملت نسختك المجانية من قبل.', 'error'); }
+    if (data?.status !== 'ok') return setNotice('تعذر تفعيل النسخة المجانية الآن.', 'error');
+    trialClaimed = true;
+    renderSubscriptionStatus();
+    updateCardActions();
+    const license = await getLicense(data.license_key);
+    if (license) {
+      renderLicense(license);
+      document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } catch (_) {
+    setNotice('تعذر تفعيل النسخة المجانية الآن. حاول مرة أخرى.', 'error');
+  }
+}
+
+async function openWithSubscription(documentId) {
+  if (!supabase) return;
+  setNotice('جارٍ فتح الوثيقة من اشتراكك...', 'info');
+  try {
+    const { data, error } = await supabase.rpc('get_subscribed_document', { p_document_id: documentId });
+    if (error) throw error;
+    if (data?.status === 'no_sheets') return setNotice(`رصيدك (${data.remaining} ورقة) لا يكفي لهذه الوثيقة (${data.sheets} ورقة).`, 'error');
+    if (data?.status !== 'ok') return setNotice('لا يوجد اشتراك فعّال.', 'error');
+    subSummary = data.summary;
+    renderSubscriptionStatus();
+    const copies = copiesAvailable(data.summary, data.sheets);
+    renderLicense({
+      license_key: 'SUB-' + String(documentId).slice(0, 8).toUpperCase(),
+      document_id: data.document_id,
+      remaining_prints: data.summary.unlimited ? 1 : copies,
+      total_prints: data.summary.unlimited ? 1 : copies,
+      email: data.email ?? '',
+      isSub: true,
+      sheets: Number(data.sheets) || 1,
+      summary: data.summary,
+      document: { title: data.title, content: data.content ?? '', storage_path: data.storage_path ?? null, category: 'وثيقة (اشتراك)' }
+    });
+    document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (_) {
+    setNotice('تعذر فتح الوثيقة الآن. حاول مرة أخرى.', 'error');
+  }
+}
+
+function renderSubCounters(license) {
+  const sm = license.summary ?? subSummary ?? {};
+  const unlimited = Boolean(sm.unlimited);
+  const remaining = Math.max(0, Number(sm.remaining ?? 0));
+  const total = Math.max(remaining, Number(sm.total ?? remaining));
+  const used = total - remaining;
+  if ($('#counter-unit')) $('#counter-unit').textContent = 'ورقة متبقية';
+  if ($('#counter-total-unit')) $('#counter-total-unit').textContent = 'ورقة';
+  if ($('#prints-remaining')) $('#prints-remaining').textContent = unlimited ? '∞' : remaining;
+  if ($('#prints-used')) $('#prints-used').textContent = unlimited ? '—' : used;
+  if ($('#total-prints')) $('#total-prints').textContent = unlimited ? '∞' : total;
+  if ($('#progress-bar')) $('#progress-bar').style.width = unlimited || !total ? '0%' : `${Math.min(100, (used / total) * 100)}%`;
+  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${unlimited ? 360 : total ? (remaining / total) * 360 : 0}deg, #dbeafe 0deg)`;
+  const printBtn = $('#print-button');
+  if (printBtn) printBtn.disabled = !unlimited && remaining < Number(license.sheets || 1);
+  const canShop = unlimited || remaining >= Number(license.sheets || 1);
+  $('#shop-open')?.classList.toggle('is-hidden', !canShop);
+  $('#shop-hint')?.classList.toggle('is-hidden', !canShop);
+}
+
+async function processSubPrint(license) {
+  const { data, error } = await supabase.rpc('print_document', { p_document_id: license.document_id, p_copies: 1 });
+  if (error || data?.status !== 'ok') {
+    throw new Error(data?.status === 'no_sheets' ? 'رصيد أوراقك لا يكفي لطباعة هذه الوثيقة.' : 'تعذر إجراء الطباعة. تحقق من اتصالك أو من رصيدك.');
+  }
+  subSummary = data.summary;
+  renderSubscriptionStatus();
+  const copies = copiesAvailable(data.summary, license.sheets);
+  return { ...license, summary: data.summary, remaining_prints: data.summary.unlimited ? 1 : copies };
+}
+
+function askShopCopies(max) {
+  return new Promise((resolve) => {
+    const dialog = $('#shop-copies-dialog');
+    if (!dialog) { resolve(1); return; }
+    const limit = Math.max(1, Math.min(100, Number(max) || 1));
+    let value = 1;
+    let done = false;
+    const paint = () => {
+      $('#shop-copies-value').textContent = value;
+      $('#shop-copies-hint').textContent = `الحد الأقصى المتاح: ${limit}`;
+    };
+    const minus = () => { value = Math.max(1, value - 1); paint(); };
+    const plus = () => { value = Math.min(limit, value + 1); paint(); };
+    const confirm = () => finish(value);
+    const cancel = () => finish(0);
+    function finish(result) {
+      if (done) return;
+      done = true;
+      $('#shop-copies-minus')?.removeEventListener('click', minus);
+      $('#shop-copies-plus')?.removeEventListener('click', plus);
+      $('#shop-copies-confirm')?.removeEventListener('click', confirm);
+      $('#shop-copies-close')?.removeEventListener('click', cancel);
+      dialog.removeEventListener('close', cancel);
+      if (dialog.open) dialog.close();
+      resolve(result);
+    }
+    $('#shop-copies-minus')?.addEventListener('click', minus);
+    $('#shop-copies-plus')?.addEventListener('click', plus);
+    $('#shop-copies-confirm')?.addEventListener('click', confirm);
+    $('#shop-copies-close')?.addEventListener('click', cancel);
+    dialog.addEventListener('close', cancel);
+    paint();
+    dialog.showModal();
+  });
+}
+
 class CheckoutError extends Error {}
 
-async function startCheckout(documentId, copiesCount) {
+async function startCheckout(documentId, copiesCount, planCode = null) {
   if (!supabase) throw new CheckoutError('خدمة الدفع غير متاحة الآن. حاول مرة أخرى لاحقًا.');
-  if (!documentId) throw new CheckoutError('هذه الوثيقة غير مربوطة بسجل الدفع.');
-  if (!Number.isInteger(copiesCount) || copiesCount < 1 || copiesCount > 100) throw new CheckoutError('اختر عددًا صحيحًا من النسخ بين 1 و100.');
+  if (!planCode) {
+    if (!documentId) throw new CheckoutError('هذه الوثيقة غير مربوطة بسجل الدفع.');
+    if (!Number.isInteger(copiesCount) || copiesCount < 1 || copiesCount > 100) throw new CheckoutError('اختر عددًا صحيحًا من النسخ بين 1 و100.');
+  }
   try {
-    const { data, error } = await supabase.functions.invoke('create-checkout-', { body: { document_id: documentId, copies: copiesCount } });
+    const { data, error } = await supabase.functions.invoke('create-checkout-', { body: planCode ? { plan: planCode } : { document_id: documentId, copies: copiesCount } });
     if (error) {
       const status = error.context?.status;
       let code = '';
@@ -965,6 +1322,7 @@ async function startCheckout(documentId, copiesCount) {
         '502': 'بوابة الدفع غير متاحة حاليًا. حاول مرة أخرى لاحقًا.',
         bad_input: 'بيانات الطلب غير صحيحة. راجع الوثيقة وعدد النسخ.',
         document_not_found: 'هذه الوثيقة لم تعد متاحة للشراء.',
+        plan_not_found: 'هذه الباقة لم تعد متاحة.',
         bad_price: 'تعذر اعتماد سعر هذه الوثيقة. تواصل مع الدعم.',
         order_failed: 'تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.',
         payment_provider_error: 'بوابة الدفع غير متاحة حاليًا. حاول مرة أخرى لاحقًا.'
@@ -1021,13 +1379,19 @@ async function confirmCheckoutReturn(returnStatus) {
   const deadline = Date.now() + 30000;
   try {
     while (Date.now() < deadline) {
-      const { data: order, error } = await supabase.from('orders').select('id,status,copies_count,document_id,calculated_price').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data: order, error } = await supabase.from('orders').select('id,status,copies_count,document_id,calculated_price,plan').order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (error) {
         setNotice('تعذر تأكيد الطلب بسبب مشكلة اتصال. افتح حسابك لاحقًا لمراجعة حالته.', 'error');
         return;
       }
       if (order?.status === 'failed') {
         setNotice('حالة الطلب: فشل الدفع. يمكنك بدء طلب جديد.', 'error');
+        return;
+      }
+      if (order?.status === 'paid' && order.plan) {
+        await refreshSubscription(user);
+        setNotice('تم الدفع وتفعيل اشتراكك. اختر أي وثيقة وافتحها من رصيدك.', 'success');
+        document.getElementById('workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
       if (order?.status === 'paid') {
@@ -1092,6 +1456,7 @@ function openAuthDialog(mode = 'signup') {
   $('#auth-consent-wrap')?.classList.toggle('is-hidden', mode === 'reset');
   setAuthFeedback('');
   if (!$('#auth-dialog')?.open) $('#auth-dialog')?.showModal();
+  setupCaptcha(mode);
   window.lucide?.createIcons();
 }
 
@@ -1101,6 +1466,7 @@ function continuePendingPurchase() {
   pendingPurchase = null;
   sessionStorage.removeItem(PENDING_PURCHASE_KEY);
   $('#auth-dialog')?.close();
+  if (purchase.planCode) { subscribeToPlan(purchase.planCode); return; }
   selectedQuantity = Number.isInteger(purchase.copiesCount) ? Math.min(100, Math.max(1, purchase.copiesCount)) : 1;
   openPurchaseDialog(purchase.documentId);
 }
@@ -1226,11 +1592,13 @@ function setAdminFeedback(message, type = '') {
 let adminPreviewBlob = null;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 
+let adminLastPages = 1;
 async function renderPdfPreviewBlob(file) {
   await pdfReady;
   if (!pdfjsLib) throw new Error('pdfjs');
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   if (pdf.numPages > MAX_PDF_PAGES) throw new Error('too_many_pages');
+  adminLastPages = pdf.numPages;
   const page = await pdf.getPage(1);
   const base = page.getViewport({ scale: 1 });
   const viewport = page.getViewport({ scale: 900 / base.width });
@@ -1355,6 +1723,7 @@ $('#admin-form')?.addEventListener('submit', async (event) => {
     const { error } = await supabase.from('documents').insert({
       id, title, price_per_copy: price, summary: summary || null,
       content: pdfFile ? '' : content, storage_path: storagePath, preview_path: previewPath,
+      sheets: pdfFile ? Math.min(500, Math.max(1, adminLastPages)) : 1,
       is_published: $('#admin-publish').checked
     });
     if (error) throw error;
@@ -1539,6 +1908,25 @@ const SHOP_ERRORS = {
   rate_limited: 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.'
 };
 
+let shopCode = '';
+
+async function callPrintShop(body) {
+  let result;
+  try {
+    result = await supabase.functions.invoke('print-shop', { body });
+  } catch (_) {
+    throw new Error('تعذر الاتصال بالخدمة. تحقق من الاتصال وأعد المحاولة.');
+  }
+  const { data, error } = result;
+  if (error || !data) {
+    let status = '';
+    try { status = (await error?.context?.json?.())?.status ?? ''; } catch (_) { /* ignore */ }
+    throw new Error(SHOP_ERRORS[status] || 'تعذر تنفيذ العملية الآن. حاول مرة أخرى.');
+  }
+  if (data.status !== 'ok') throw new Error(SHOP_ERRORS[data.status] || 'تعذر تنفيذ العملية.');
+  return data;
+}
+
 function formatShopCode(code) {
   return code.replace(/(.{4})(?=.)/g, '$1-');
 }
@@ -1576,12 +1964,12 @@ async function copyText(text, feedbackText) {
   }
 }
 
-function showShopDialog(code, expiresAt) {
+function showShopDialog(code, expiresAt, maxPrints) {
   const link = `${location.origin}${location.pathname}?shop=${code}`;
   $('#shop-code-text').textContent = formatShopCode(code);
   $('#shop-link').value = link;
   $('#shop-qr-wrap')?.classList.toggle('is-hidden', !drawQr($('#shop-qr'), link));
-  $('#shop-expiry').textContent = `صالح حتى ${new Date(expiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })}`;
+  $('#shop-expiry').textContent = `${maxPrints ? `يسمح بطباعة ${maxPrints} نسخة فقط • ` : ''}صالح حتى ${new Date(expiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })}`;
   if ($('#shop-feedback')) { $('#shop-feedback').textContent = ''; $('#shop-feedback').className = 'auth-feedback'; }
   $('#shop-dialog')?.showModal();
 }
@@ -1591,11 +1979,19 @@ async function createShopCode() {
   const button = $('#shop-open');
   if (button) button.disabled = true;
   try {
-    const { data, error } = await supabase.rpc('create_print_shop_code', { p_license_key: activeLicense.license_key });
+    const maxCopies = activeLicense.isSub ? subMaxCopies(activeLicense) : Number(activeLicense.remaining_prints);
+    const copies = await askShopCopies(maxCopies);
+    if (!copies) return;
+    const { data, error } = activeLicense.isSub
+      ? await supabase.rpc('create_print_shop_code_sub', { p_document_id: activeLicense.document_id, p_copies: copies })
+      : await supabase.rpc('create_print_shop_code', { p_license_key: activeLicense.license_key, p_copies: copies });
     if (error) throw error;
-    if (data?.status === 'no_prints') setNotice('لا توجد نسخ متبقية في هذا الترخيص.', 'error');
+    if (data?.status === 'too_many_copies') setNotice('العدد المطلوب أكبر من رصيدك المتاح.', 'error');
+    else if (data?.status === 'no_sheets') setNotice('رصيد أوراقك لا يكفي لهذه الوثيقة.', 'error');
+    else if (data?.status === 'no_subscription') setNotice('لا يوجد اشتراك فعّال.', 'error');
+    else if (data?.status === 'no_prints') setNotice('لا توجد نسخ متبقية في هذا الترخيص.', 'error');
     else if (data?.status === 'too_many') setNotice('لديك 5 رموز غير مستعملة. استعمل أحدها أو انتظر انتهاءها (24 ساعة).', 'error');
-    else if (data?.status === 'ok') showShopDialog(data.code, data.expires_at);
+    else if (data?.status === 'ok') showShopDialog(data.code, data.expires_at, data.max_prints);
     else setNotice('تعذر إنشاء الرمز. حاول مرة أخرى.', 'error');
   } catch (_) {
     setNotice('تعذر إنشاء رمز المطبعة الآن. حاول مرة أخرى.', 'error');
@@ -1609,24 +2005,19 @@ async function openShopCode(raw) {
   if (!/^[A-Z2-9]{16}$/.test(code)) return setNotice(SHOP_ERRORS.invalid, 'error');
   if (!supabase) return setNotice('تعذر الاتصال بالخدمة. حدّث الصفحة وحاول مرة أخرى.', 'error');
   setNotice('جارٍ فتح الوثيقة...', 'info');
-  let result;
+  let data;
   try {
-    result = await supabase.functions.invoke('print-shop', { body: { code } });
-  } catch (_) {
-    return setNotice('تعذر الاتصال بالخدمة. تحقق من الاتصال وأعد المحاولة.', 'error');
+    data = await callPrintShop({ code, action: 'open' });
+  } catch (error) {
+    return setNotice(error.message, 'error');
   }
-  const { data, error } = result;
-  if (error || !data) {
-    let status = '';
-    try { status = (await error?.context?.json?.())?.status ?? ''; } catch (_) { /* ignore */ }
-    return setNotice(SHOP_ERRORS[status] || 'تعذر فتح الوثيقة الآن. حاول مرة أخرى.', 'error');
-  }
-  if (data.status !== 'ok') return setNotice(SHOP_ERRORS[data.status] || 'تعذر فتح الوثيقة.', 'error');
+  shopCode = code;
+  const left = Number(data.copies_left);
   renderLicense({
     license_key: 'PRINT-SHOP',
     document_id: data.document_id,
-    remaining_prints: 0,
-    total_prints: 0,
+    remaining_prints: left,
+    total_prints: Math.max(left, Number(data.max_prints) || left),
     email: data.email ?? '',
     watermarkTag: 'PRINT-SHOP',
     isShop: true,
@@ -1668,13 +2059,14 @@ function requireConsent() {
 }
 
 $('#auth-close')?.addEventListener('click', () => $('#auth-dialog')?.close());
-$('#auth-switch')?.addEventListener('click', () => openAuthDialog(authMode === 'signup' ? 'login' : 'signup'));
 $('#forgot-password')?.addEventListener('click', async () => {
   if (!supabase) return setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
   const email = $('#auth-email')?.value.trim();
   if (!email) return setAuthFeedback('أدخل بريدك الإلكتروني أولًا.', 'error');
+  if (TURNSTILE_SITE_KEY && !captchaToken) return setAuthFeedback('أكمل التحقق البشري أولًا ثم اضغط «نسيت كلمة المرور».', 'error');
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname, captchaToken: captchaToken || undefined });
+    resetCaptcha();
     setAuthFeedback(error ? 'تعذر إرسال رابط الاستعادة. تحقق من البريد وحاول مرة أخرى.' : 'تم إرسال رابط استرجاع كلمة المرور إلى بريدك.', error ? 'error' : 'success');
   } catch (_) {
     setAuthFeedback('تعذر الاتصال بخدمة الحسابات. حاول مرة أخرى.', 'error');
@@ -1687,6 +2079,10 @@ $('#auth-form')?.addEventListener('submit', async (event) => {
     return;
   }
   if (authMode !== 'reset' && !requireConsent()) return;
+  if (authMode !== 'reset' && TURNSTILE_SITE_KEY && !captchaToken) {
+    setAuthFeedback('أكمل التحقق البشري أولًا.', 'error');
+    return;
+  }
   const email = $('#auth-email')?.value.trim();
   const password = $('#auth-password')?.value;
   const submit = $('#auth-submit');
@@ -1696,8 +2092,8 @@ $('#auth-form')?.addEventListener('submit', async (event) => {
     const result = authMode === 'reset'
       ? await supabase.auth.updateUser({ password })
       : authMode === 'signup'
-        ? await supabase.auth.signUp({ email, password, options: { data: { accepted_terms: 'v2', accepted_terms_at: new Date().toISOString() } } })
-        : await supabase.auth.signInWithPassword({ email, password });
+        ? await supabase.auth.signUp({ email, password, options: { data: { accepted_terms: 'v2', accepted_terms_at: new Date().toISOString() }, captchaToken: captchaToken || undefined } })
+        : await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: captchaToken || undefined } });
     if (result.error) throw result.error;
     if (authMode !== 'reset') saveConsent();
     if (authMode === 'reset') {
@@ -1715,6 +2111,7 @@ $('#auth-form')?.addEventListener('submit', async (event) => {
     setAuthFeedback(authErrorMessage(error), 'error');
   } finally {
     if (submit) submit.disabled = false;
+    if (authMode !== 'reset') resetCaptcha();
   }
 });
 
@@ -1779,6 +2176,7 @@ document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener(
 }));
 
 loadCatalogFromSupabase();
+loadPlans();
 restorePendingPurchase();
 supabase?.auth.getSession().then(({ data: { session }, error }) => {
   if (error) {
@@ -1817,3 +2215,18 @@ window.lucide?.createIcons();
   const shopParam = new URLSearchParams(window.location.search).get('shop');
   if (shopParam) openShopCode(shopParam);
 }
+
+// ---------- Dark mode ----------
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const icon = $('#theme-toggle i, #theme-toggle svg');
+  if (icon) { const n = document.createElement('i'); n.dataset.lucide = theme === 'dark' ? 'sun' : 'moon'; icon.replaceWith(n); window.lucide?.createIcons(); }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = theme === 'dark' ? '#0b1220' : '#f8fafc';
+}
+$('#theme-toggle')?.addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('medad-theme', next); } catch (_) {}
+  applyTheme(next);
+});
+applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
