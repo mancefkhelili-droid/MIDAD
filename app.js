@@ -678,28 +678,34 @@ function ensureWatermarkOverlay() {
   const defs = document.createElementNS(NS, 'defs');
   const pattern = document.createElementNS(NS, 'pattern');
   pattern.setAttribute('id', 'wm-pattern');
-  const tileW = Math.max(420, Math.round(watermarkText.length * 12 + 90));
+  const tileW = Math.max(460, Math.round(watermarkText.length * 12 + 110));
+  const tileH = 140;
   pattern.setAttribute('width', String(tileW));
-  pattern.setAttribute('height', '150');
+  pattern.setAttribute('height', String(tileH));
   pattern.setAttribute('patternUnits', 'userSpaceOnUse');
-  pattern.setAttribute('patternTransform', 'rotate(-28)');
-  const label = document.createElementNS(NS, 'text');
-  // The page is RTL: without direction=ltr + centered anchor the text runs out of the tile and gets clipped.
-  label.setAttribute('direction', 'ltr');
-  label.setAttribute('text-anchor', 'middle');
-  label.setAttribute('x', String(tileW / 2));
-  label.setAttribute('y', '80');
-  label.setAttribute('font-size', '17');
-  label.setAttribute('font-weight', '700');
-  label.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-  label.setAttribute('fill', '#0f172a');
-  label.setAttribute('fill-opacity', '0.26');
-  label.setAttribute('stroke', '#ffffff');
-  label.setAttribute('stroke-opacity', '0.55');
-  label.setAttribute('stroke-width', '3');
-  label.setAttribute('paint-order', 'stroke');
-  label.style.unicodeBidi = 'plaintext';
-  label.textContent = watermarkText;
+  // Straight (horizontal) text, two staggered rows per tile so nothing is clipped at the tile edge.
+  const makeLabel = (x, y) => {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('direction', 'ltr');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('x', String(x));
+    t.setAttribute('y', String(y));
+    t.setAttribute('font-size', '17');
+    t.setAttribute('font-weight', '700');
+    t.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
+    t.setAttribute('fill', '#0f172a');
+    t.setAttribute('fill-opacity', '0.24');
+    t.setAttribute('stroke', '#ffffff');
+    t.setAttribute('stroke-opacity', '0.55');
+    t.setAttribute('stroke-width', '3');
+    t.setAttribute('paint-order', 'stroke');
+    t.style.unicodeBidi = 'plaintext';
+    t.textContent = watermarkText;
+    return t;
+  };
+  const label = makeLabel(tileW / 2, 40);
+  pattern.appendChild(makeLabel(0, 110));
+  pattern.appendChild(makeLabel(tileW, 110));
   pattern.appendChild(label);
   defs.appendChild(pattern);
   const rect = document.createElementNS(NS, 'rect');
@@ -1057,6 +1063,18 @@ function renderCounters(license) {
 const copiesAvailable = (summary, sheets) => (summary?.unlimited ? 100 : Math.floor(Number(summary?.remaining ?? 0) / Math.max(1, Number(sheets) || 1)));
 const subMaxCopies = (license) => Math.max(1, Math.min(100, copiesAvailable(license.summary ?? subSummary, license.sheets)));
 
+let plansForDocument = null;
+const hasActiveSubscription = () => Boolean(subSummary?.has_subscription);
+
+function openPlansDialog(documentId = null) {
+  plansForDocument = documentId && documentCatalog[documentId] ? documentId : null;
+  $('#plans-single')?.classList.toggle('is-hidden', !plansForDocument);
+  closeProfileDropdown?.();
+  if (!plans.length) loadPlans();
+  const dialog = $('#plans-dialog');
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
 function setPlansMessage(text, retry = false) {
   const grid = $('#plans-grid');
   if (!grid) return;
@@ -1098,7 +1116,7 @@ function renderPlans() {
   grid.replaceChildren();
   plans.forEach((plan, index) => {
     const card = document.createElement('article');
-    card.className = `plan-card${index === 1 ? ' featured' : ''}`;
+    card.className = 'plan-card';
     const name = document.createElement('h3');
     name.textContent = plan.name;
     const price = document.createElement('div');
@@ -1124,6 +1142,7 @@ function renderPlans() {
 
 async function subscribeToPlan(code) {
   if (!supabase) return;
+  $('#plans-dialog')?.close();
   let user = null;
   try { ({ data: { user } } = await supabase.auth.getUser()); } catch (_) {}
   if (!user) {
@@ -1178,21 +1197,28 @@ function renderSubscriptionStatus() {
 }
 
 function updateCardActions() {
+  const subscribed = Boolean(subSummary?.has_subscription);
+  const previewBuy = $('#preview-buy span');
+  if (previewBuy) previewBuy.textContent = subscribed ? 'افتح بالاشتراك' : 'شراء الوثيقة';
   document.querySelectorAll('.catalog-card .card-extra').forEach((extra) => {
-    const id = extra.closest('[data-document]')?.dataset.document;
+    const card = extra.closest('[data-document]');
+    const id = card?.dataset.document;
     if (!id || !documentCatalog[id]) return;
+    // A subscriber never sees "buy" or the price: the document opens from the subscription balance.
+    card.querySelector('.catalog-footer')?.classList.toggle('is-hidden', subscribed);
     extra.replaceChildren();
     const info = document.createElement('span');
     info.className = 'card-sheets';
     info.textContent = `${documentCatalog[id].sheets} ورقة`;
     extra.append(info);
-    if (subSummary?.active) {
+    if (subscribed) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'card-extra-btn';
+      b.className = 'card-extra-btn open-sub-btn';
       b.textContent = 'افتح بالاشتراك';
       b.addEventListener('click', () => openWithSubscription(id));
       extra.append(b);
+      return;
     }
     if (!currentUser || !trialClaimed) {
       const b = document.createElement('button');
@@ -1529,6 +1555,11 @@ async function openPurchase(documentId) {
     if (!user) {
       savePendingPurchase({ documentId });
       openAuthDialog('login');
+      return;
+    }
+    if (hasActiveSubscription()) {
+      // Subscribers never go to the payment page: open the document from the subscription balance.
+      openWithSubscription(documentId);
       return;
     }
     openPurchaseDialog(documentId);
@@ -2193,6 +2224,14 @@ $('#account-open')?.addEventListener('click', async () => {
   }
 });
 $('#account-close')?.addEventListener('click', () => $('#account-dialog')?.close());
+$('#plans-open')?.addEventListener('click', () => openPlansDialog());
+$('#plans-nav')?.addEventListener('click', (event) => { event.preventDefault(); openPlansDialog(); });
+$('#plans-close')?.addEventListener('click', () => $('#plans-dialog')?.close());
+$('#plans-single')?.addEventListener('click', () => {
+  const id = plansForDocument;
+  $('#plans-dialog')?.close();
+  if (id) openPurchaseDialog(id);
+});
 $('#login-trigger')?.addEventListener('click', () => openAuthDialog('login'));
 $('#profile-trigger')?.addEventListener('click', (event) => {
   event.stopPropagation();
