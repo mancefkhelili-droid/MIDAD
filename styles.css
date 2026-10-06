@@ -376,3 +376,11 @@ dialog{margin:auto;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}
 .catalog-footer.is-hidden{display:none!important}
 .open-sub-btn{flex:1 1 100%;min-height:46px;font-weight:700;font-size:14px;color:#12336f;background:#dbeafe;border-color:#93c5fd}
 .open-sub-btn:hover{color:#fff;background:#2563eb}
+
+
+/* License key is internal/automatic: never shown to the user (the shop-code entry stays) */
+.activation-section > .section-kicker,
+.activation-section .activation-heading,
+.activation-section #activation-form,
+.viewer-id{display:none!important}
+.account-orders .order-item .card-extra-btn{margin-top:8px}

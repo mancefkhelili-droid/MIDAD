@@ -340,10 +340,30 @@ async function loadAccountHistory() {
       title.textContent = titles[license.document_id] ?? 'وثيقة غير متاحة';
       const remaining = document.createElement('span');
       remaining.textContent = `${license.remaining_prints} نسخة متبقية`;
-      const key = document.createElement('small');
-      key.textContent = license.license_key;
+      // The license key stays internal: the user just opens the document with one tap.
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'card-extra-btn';
+      openBtn.textContent = 'فتح الوثيقة';
+      openBtn.addEventListener('click', async () => {
+        openBtn.disabled = true;
+        try {
+          const opened = await getLicense(license.license_key);
+          if (opened) {
+            $('#account-dialog')?.close();
+            renderLicense(opened);
+            document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            setNotice('تعذر فتح الوثيقة الآن. حاول مرة أخرى.', 'error');
+          }
+        } catch (_) {
+          setNotice('تعذر فتح الوثيقة الآن. حاول مرة أخرى.', 'error');
+        } finally {
+          openBtn.disabled = false;
+        }
+      });
       top.append(title, remaining);
-      article.append(top, key);
+      article.append(top, openBtn);
       return article;
     }));
   } catch (_) {
@@ -1461,7 +1481,7 @@ async function confirmCheckoutReturn(returnStatus) {
           const license = await getLicense(found.license_key);
           if (license) {
             renderLicense(license);   // also fills the activation field with the key
-            setNotice(`تم الدفع وتفعيل الترخيص تلقائيًا. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة.`, 'success');
+            setNotice(`تم الدفع وفتح وثيقتك تلقائيًا. المتبقي ${license.remaining_prints} نسخة.`, 'success');
             document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
           }
