@@ -341,10 +341,23 @@ async function loadAccountHistory() {
       title.textContent = titles[license.document_id] ?? 'وثيقة غير متاحة';
       const remaining = document.createElement('span');
       remaining.textContent = `${license.remaining_prints} نسخة متبقية`;
-      const key = document.createElement('small');
-      key.textContent = license.license_key;
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'card-extra-btn';
+      open.textContent = 'فتح الوثيقة';
+      open.addEventListener('click', async () => {
+        try {
+          const lic = await getLicense(license.license_key);
+          if (!lic) return setNotice('تعذر فتح هذه الوثيقة الآن.', 'error');
+          $('#account-dialog')?.close();
+          renderLicense(lic);
+          document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) {
+          setNotice(error.message || 'تعذر فتح الوثيقة الآن.', 'error');
+        }
+      });
       top.append(title, remaining);
-      article.append(top, key);
+      article.append(top, open);
       return article;
     }));
   } catch (_) {
@@ -352,6 +365,32 @@ async function loadAccountHistory() {
     if (summary) summary.textContent = 'تعذر تحميل البيانات';
     licensesList.textContent = 'تعذر تحميل التراخيص الآن. تحقق من اتصالك ثم أعد المحاولة.';
   }
+}
+
+function askConfirm(message, okLabel = 'متابعة', kicker = 'تأكيد') {
+  return new Promise((resolve) => {
+    const dialog = $('#confirm-dialog');
+    if (!dialog) { resolve(true); return; }
+    $('#confirm-text').textContent = message;
+    $('#confirm-kicker').textContent = kicker;
+    $('#confirm-ok span').textContent = okLabel;
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      $('#confirm-ok').removeEventListener('click', ok);
+      $('#confirm-cancel').removeEventListener('click', cancel);
+      dialog.removeEventListener('close', cancel);
+      if (dialog.open) dialog.close();
+      resolve(value);
+    };
+    const ok = () => finish(true);
+    const cancel = () => finish(false);
+    $('#confirm-ok').addEventListener('click', ok);
+    $('#confirm-cancel').addEventListener('click', cancel);
+    dialog.addEventListener('close', cancel);
+    dialog.showModal();
+  });
 }
 
 function showToast(message, type = 'info') {
@@ -601,7 +640,7 @@ function renderLicense(license) {
   if ($('#prints-used')) $('#prints-used').textContent = used;
   if ($('#total-prints')) $('#total-prints').textContent = total;
   if ($('#progress-bar')) $('#progress-bar').style.width = `${total ? Math.min(100, (used / total) * 100) : 0}%`;
-  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #dbeafe 0deg)`;
+  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#535a34 ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #eef1e0 0deg)`;
   
   const stateEl = $('#license-state');
   if (stateEl) {
@@ -614,7 +653,7 @@ function renderLicense(license) {
     if ($('#prints-used')) $('#prints-used').textContent = '0';
     if ($('#total-prints')) $('#total-prints').textContent = symbol;
     if ($('#progress-bar')) $('#progress-bar').style.width = '0%';
-    if ($('#counter-ring')) $('#counter-ring').style.background = 'conic-gradient(#2563eb 360deg, #dbeafe 0deg)';
+    if ($('#counter-ring')) $('#counter-ring').style.background = 'conic-gradient(#535a34 360deg, #eef1e0 0deg)';
     if ($('#license-key')) $('#license-key').value = '';
   }
   
@@ -683,6 +722,13 @@ async function applyWatermark(license) {
   });
   document.body.dataset.printWatermark = watermarkText;
   ensureWatermarkOverlay();
+  const paperEl = $('#document-paper');
+  if (paperEl?.parentElement) {
+    let banner = $('#wm-banner');
+    if (!banner) { banner = document.createElement('div'); banner.id = 'wm-banner'; paperEl.parentElement.insertBefore(banner, paperEl); }
+    banner.hidden = Boolean(license?.isAdmin);
+    banner.textContent = email ? `🔒 هذه النسخة مسجّلة باسم ${email} — العلامة المائية تظهر على الشاشة فقط ولن تُطبع مع النسخة.` : '🔒 العلامة المائية تظهر على الشاشة فقط ولن تُطبع مع النسخة.';
+  }
   return watermarkText;
 }
 
@@ -700,18 +746,22 @@ function ensureWatermarkOverlay() {
   const defs = document.createElementNS(NS, 'defs');
   const pattern = document.createElementNS(NS, 'pattern');
   pattern.setAttribute('id', 'wm-pattern');
-  pattern.setAttribute('width', '420');
-  pattern.setAttribute('height', '170');
+  pattern.setAttribute('width', '380');
+  pattern.setAttribute('height', '140');
   pattern.setAttribute('patternUnits', 'userSpaceOnUse');
   pattern.setAttribute('patternTransform', 'rotate(-28)');
   const label = document.createElementNS(NS, 'text');
   label.setAttribute('x', '14');
   label.setAttribute('y', '90');
-  label.setAttribute('font-size', '15');
-  label.setAttribute('font-weight', '600');
+  label.setAttribute('direction', 'ltr');
+  label.setAttribute('text-anchor', 'start');
+  label.style.direction = 'ltr';
+  label.style.unicodeBidi = 'isolate';
+  label.setAttribute('font-size', '21');
+  label.setAttribute('font-weight', '700');
   label.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-  label.setAttribute('fill', '#1e293b');
-  label.setAttribute('fill-opacity', '0.17');
+  label.setAttribute('fill', '#2c3020');
+  label.setAttribute('fill-opacity', '0.3');
   label.textContent = watermarkText;
   pattern.appendChild(label);
   defs.appendChild(pattern);
@@ -742,7 +792,7 @@ const ANNOT_FONTS = [
   ['تجوال', "'Tajawal', sans-serif"], ['القاهرة', "'Cairo', sans-serif"], ['أميري', "'Amiri', serif"],
   ['المراعي', "'Almarai', sans-serif"], ['تقليدي', "'Traditional Arabic', serif"], ['Monospace', "'Courier New', monospace"]
 ];
-const annotPrefs = { size: 2.4, color: '#111827', bold: false, italic: false, underline: false, align: 'right', font: ANNOT_FONTS[0][1], fill: '', stroke: '#2563eb', sw: 0.3, op: 1 };
+const annotPrefs = { size: 2.4, color: '#1c1e14', bold: false, italic: false, underline: false, align: 'right', font: ANNOT_FONTS[0][1], fill: '', stroke: '#535a34', sw: 0.3, op: 1 };
 
 function annotDefaults(type) {
   const base = { t: type, x: 20, y: 20, rot: 0, op: 1, z: ++annotZ };
@@ -1010,11 +1060,13 @@ function annotAction(name) {
   const d = el?._d;
   if (name === 'clear') {
     if (!document.querySelector('.annot')) return;
-    if (!window.confirm('حذف كل ما أضفته على الملف؟')) return;
-    document.querySelectorAll('.annot').forEach((e) => e.remove());
-    annotSelected = null;
-    commitAnnots(true);
-    dockRender();
+    askConfirm('سيُحذف كل ما أضفته على الملف.', 'احذف الكل', 'مسح الكل').then((yes) => {
+      if (!yes) return;
+      document.querySelectorAll('.annot').forEach((e) => e.remove());
+      annotSelected = null;
+      commitAnnots(true);
+      dockRender();
+    });
     return;
   }
   if (!d) return;
@@ -1205,7 +1257,7 @@ function dockBuildBody(mode, body) {
       const cur = sel && sel.t !== 'text' ? sel : { ...annotPrefs };
       let r = row();
       r.append(dField('التعبئة', dColor(cur.fill || '#ffffff', (v) => setAnnotProps({ fill: v }), true, () => { setAnnotProps({ fill: '' }); dockRender(); })));
-      r.append(dField('الحد', dColor(cur.stroke || '#2563eb', (v) => setAnnotProps({ stroke: v }))));
+      r.append(dField('الحد', dColor(cur.stroke || '#535a34', (v) => setAnnotProps({ stroke: v }))));
       r.append(dField('السُّمك', dSelect([['بدون', 0], ['رفيع', 0.2], ['عادي', 0.4], ['سميك', 0.8], ['عريض', 1.4]], cur.sw, (v) => setAnnotProps({ sw: Number(v) }))));
       r = row();
       r.append(dField('الشفافية', dRange(0.1, 1, 0.05, sel?.op ?? 1, (v) => { if (annotSelected) setAnnotProps({ op: v }); })));
@@ -1340,6 +1392,7 @@ async function renderPdfInto(container, path, license) {
       const viewport = page.getViewport({ scale: pixelWidth / base.width });
       const pageEl = document.createElement('div');
       pageEl.className = 'pdf-page';
+      pageEl.style.setProperty('--ar', String(viewport.width / viewport.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
@@ -1444,7 +1497,7 @@ $('#print-button')?.addEventListener('click', async () => {
     if (authResult.error) throw new Error('تعذر التحقق من جلسة الدخول. حاول مرة أخرى.');
     }
     if (activeLicense.document.storage_path && $('#document-content')?.dataset.pdfReady !== '1') throw new Error('انتظر حتى يكتمل تحميل الملف ثم اطبع.');
-    if (!activeLicense.isAdmin && !window.confirm(activeLicense.isSub ? `ستُخصم ${activeLicense.sheets} ورقة من رصيدك، متابعة؟` : activeLicense.isShop ? 'ستُخصم نسخة واحدة من رصيد الزبون، متابعة؟' : 'ستُخصم نسخة واحدة من ترخيصك، متابعة؟')) return;
+    if (!activeLicense.isAdmin && !(await askConfirm(activeLicense.isSub ? `ستُخصم ${activeLicense.sheets} ورقة من رصيدك عند الطباعة. هل تريد المتابعة؟` : activeLicense.isShop ? 'ستُخصم نسخة واحدة من رصيد الزبون. هل تريد المتابعة؟' : 'ستُخصم نسخة واحدة من رصيدك ولا يمكن استرجاعها. هل تريد المتابعة؟', 'اطبع الآن', 'تأكيد الطباعة'))) return;
     if (activeLicense.isAdmin) {
       const { data: adminCheck } = await supabase.rpc('admin_get_document', { p_id: activeLicense.document_id });
       if (!adminCheck) throw new Error('صلاحية الأدمن غير متاحة. سجّل الدخول من جديد.');
@@ -1495,7 +1548,7 @@ function renderCounters(license) {
   if ($('#prints-used')) $('#prints-used').textContent = used;
   if ($('#total-prints')) $('#total-prints').textContent = total;
   if ($('#progress-bar')) $('#progress-bar').style.width = `${total ? Math.min(100, (used / total) * 100) : 0}%`;
-  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #dbeafe 0deg)`;
+  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#535a34 ${total ? Math.max(0, (remaining / total) * 360) : 0}deg, #eef1e0 0deg)`;
   const printBtn = $('#print-button');
   if (printBtn) printBtn.disabled = remaining <= 0;
   if (remaining <= 0) {
@@ -1513,7 +1566,7 @@ async function loadPlans() {
   const grid = $('#plans-grid');
   if (!grid || !supabase) return;
   try {
-    const { data, error } = await supabase.from('plans').select('*').eq('is_active', true).order('price', { ascending: true });
+    const { data, error } = await supabase.from('plans').select('*').eq('active', true).order('sort', { ascending: true });
     if (error || !data?.length) { grid.textContent = 'الباقات غير متاحة الآن.'; return; }
     plans = data;
     renderPlans();
@@ -1539,9 +1592,9 @@ function renderPlans() {
     price.append(per);
     const sheets = document.createElement('p');
     sheets.className = 'plan-sheets';
-    const base = plan.sheets ?? plan.sheets_total ?? plan.base_sheets;
-    const bonus = Number(plan.bonus_sheets ?? plan.bonus ?? 0);
-    sheets.textContent = base == null ? 'طباعة غير محدودة' : `${Number(base) + bonus} ورقة${bonus ? ` (${Number(base)} + ${bonus} هدية)` : ''}`;
+    const base = plan.sheets_base;
+    const bonus = Number(plan.sheets_bonus ?? 0);
+    sheets.textContent = base == null ? 'طباعة غير محدودة (حتى 30 ورقة يوميًا)' : `${Number(base) + bonus} ورقة${bonus ? ` (${Number(base)} + ${bonus} هدية)` : ''}`;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'primary-button full-button';
@@ -1554,6 +1607,7 @@ function renderPlans() {
 
 async function subscribeToPlan(code) {
   if (!supabase) return;
+  $('#plans-dialog')?.close();
   let user = null;
   try { ({ data: { user } } = await supabase.auth.getUser()); } catch (_) {}
   if (!user) {
@@ -1650,7 +1704,7 @@ async function claimTrial(documentId) {
     openAuthDialog('signup');
     return;
   }
-  if (!window.confirm(`ستستعمل نسختك المجانية الوحيدة على «${documentCatalog[documentId].title}». متأكد؟`)) return;
+  if (!(await askConfirm(`ستستعمل نسختك المجانية الوحيدة على «${documentCatalog[documentId].title}». لا يمكن تغييرها بعد ذلك.`, 'نعم، استعملها', 'النسخة المجانية'))) return;
   try {
     const { data, error } = await supabase.rpc('claim_trial', { p_document_id: documentId });
     if (error) throw error;
@@ -1710,7 +1764,7 @@ function renderSubCounters(license) {
   if ($('#prints-used')) $('#prints-used').textContent = used;
   if ($('#total-prints')) $('#total-prints').textContent = total;
   if ($('#progress-bar')) $('#progress-bar').style.width = !total ? '0%' : `${Math.min(100, (used / total) * 100)}%`;
-  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#2563eb ${total ? (remaining / total) * 360 : 0}deg, #dbeafe 0deg)`;
+  if ($('#counter-ring')) $('#counter-ring').style.background = `conic-gradient(#535a34 ${total ? (remaining / total) * 360 : 0}deg, #eef1e0 0deg)`;
   const printBtn = $('#print-button');
   if (printBtn) printBtn.disabled = remaining < Number(license.sheets || 1);
   const canShop = remaining >= Number(license.sheets || 1);
@@ -1872,7 +1926,7 @@ async function confirmCheckoutReturn(returnStatus) {
           const license = await getLicense(found.license_key);
           if (license) {
             renderLicense(license);   // also fills the activation field with the key
-            setNotice(`تم الدفع وتفعيل الترخيص تلقائيًا. مفتاحك: ${license.license_key}، والمتبقي ${license.remaining_prints} نسخة.`, 'success');
+            setNotice(`تم الدفع وفُتحت وثيقتك تلقائيًا. المتبقي ${license.remaining_prints} نسخة، وتجدها دائمًا في «مستنداتي».`, 'success');
             document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
           }
@@ -2336,11 +2390,11 @@ function buildAdminRow(doc) {
   remove.className = 'admin-mini danger';
   remove.textContent = 'حذف نهائي';
   remove.addEventListener('click', async () => {
-    if (!window.confirm(`حذف «${doc.title}» نهائيًا؟ لا يمكن التراجع.`)) return;
+    if (!(await askConfirm(`حذف «${doc.title}» نهائيًا؟ لا يمكن التراجع.`, 'احذف', 'حذف وثيقة'))) return;
     remove.disabled = true;
     let { data, error } = await supabase.rpc('admin_delete_document', { p_id: doc.id, p_force: false });
     if (!error && data?.status === 'has_sales') {
-      const sure = window.confirm(`تنبيه: لهذه الوثيقة ${data.paid_orders} طلبات مدفوعة و${data.licenses} تراخيص.\nحذفها سيمنع المشترين من فتحها ولا يمكن التراجع.\nهل تريد الحذف رغم ذلك؟`);
+      const sure = await askConfirm(`تنبيه: لهذه الوثيقة ${data.paid_orders} طلبات مدفوعة و${data.licenses} تراخيص.\nحذفها سيمنع المشترين من فتحها ولا يمكن التراجع.\nهل تريد الحذف رغم ذلك؟`, 'احذف رغم ذلك', 'تنبيه');
       if (!sure) { remove.disabled = false; return; }
       ({ data, error } = await supabase.rpc('admin_delete_document', { p_id: doc.id, p_force: true }));
     }
@@ -2695,7 +2749,7 @@ function applyTheme(theme) {
   const icon = $('#theme-toggle i, #theme-toggle svg');
   if (icon) { const n = document.createElement('i'); n.dataset.lucide = theme === 'dark' ? 'sun' : 'moon'; icon.replaceWith(n); window.lucide?.createIcons(); }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = theme === 'dark' ? '#0b1220' : '#f8fafc';
+  if (meta) meta.content = theme === 'dark' ? '#15170f' : '#fbf8f1';
 }
 $('#theme-toggle')?.addEventListener('click', () => {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -2710,3 +2764,15 @@ $('#catalog-search')?.addEventListener('input', (event) => {
     card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 });
+
+// ---------- Plans dialog ----------
+async function openPlans() {
+  closeProfileDropdown?.();
+  $('#plans-dialog')?.showModal();
+  if (!plans.length) loadPlans();
+  try { const { data: { user } } = await supabase.auth.getUser(); refreshSubscription(user); } catch (_) {}
+}
+$('#plans-open')?.addEventListener('click', openPlans);
+$('#plans-nav')?.addEventListener('click', (e) => { e.preventDefault(); openPlans(); });
+$('#sub-badge')?.addEventListener('click', openPlans);
+$('#plans-close')?.addEventListener('click', () => $('#plans-dialog')?.close());
