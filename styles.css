@@ -414,6 +414,22 @@ body.annot-placing .annot-layer{cursor:crosshair}
 .oauth-button .oauth-logo{width:20px;height:20px;flex:none}
 .oauth-button{color:#1c1f15}
 
+/* ---------- mobile header fit ---------- */
+html,body{overflow-x:hidden;max-width:100%}
+.topbar{min-width:0}
+.header-actions{min-width:0}
+@media (max-width:640px){
+  .topbar{gap:8px}
+  .brand small{display:none}
+  .brand strong{font-size:18px}
+  .brand-mark.logo{width:24px;height:36px}
+  .profile-trigger-info,.profile-chevron{display:none}
+  .profile-trigger{padding:3px}
+  .header-actions{gap:6px}
+  .theme-toggle{width:36px;height:36px}
+  .sub-badge{font-size:.7rem;padding:4px 8px}
+}
+
 /* ---------- Dark mode (generated color overrides) ---------- */
 html[data-theme="dark"]{color-scheme:dark}
 html[data-theme="dark"]{--ink:#dbe0d1;--muted:#b4b4a6;--line:#433c2f;--paper:#141414;--warm:#221d11}
