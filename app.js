@@ -2788,6 +2788,7 @@ function hideLanding() { document.body.classList.remove('landing-on'); }
 {
   const p = new URLSearchParams(window.location.search);
   if (p.get('shop') || p.get('status') || p.get('checkout') || p.get('order')) hideLanding();
+  document.querySelectorAll('.js-start').forEach((b) => b.addEventListener('click', () => openAuthDialog('login')));
   $('#landing-form')?.addEventListener('submit', (e) => { e.preventDefault(); const q = $('#landing-q').value.trim(); if (q) { const s = $('#catalog-search'); if (s) { s.value = q; s.dispatchEvent(new Event('input')); } } openAuthDialog('login'); });
   supabase?.auth.getSession().then(({ data }) => { if (data?.session) hideLanding(); }).catch(() => {});
   supabase?.auth.onAuthStateChange((_e, session) => { if (session) { hideLanding(); window.scrollTo(0, 0); } else if (_e === 'SIGNED_OUT') document.body.classList.add('landing-on'); });
@@ -2895,3 +2896,12 @@ $('#promo-create')?.addEventListener('submit', async (e) => {
   showToast('تم إنشاء الرمز.', 'success');
   loadPromos();
 });
+
+{
+  const els = document.querySelectorAll('.landing .rv');
+  if ('IntersectionObserver' in window) {
+    document.querySelector('.landing')?.classList.add('rv-on');
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+    els.forEach((e) => io.observe(e));
+  }
+}

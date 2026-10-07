@@ -21,17 +21,49 @@
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=31" />
+  <link rel="stylesheet" href="styles.css?v=32" />
 </head>
 <body class="landing-on">
   <section class="landing" id="landing" aria-label="مرحبًا بك في مداد">
-    <div class="landing-card">
-      <img class="landing-logo" src="logo-full.png" alt="مِداد" />
-      <h1>اطبع وثائقك بثقة مع مِداد</h1>
-      <p>اختر وثيقتك من المكتبة، عدّل عليها، واطبعها في بيتك أو في أي مطبعة.</p>
-      <form class="landing-bar" id="landing-form"><input id="landing-q" type="text" placeholder="ما الوثيقة التي تريد طباعتها؟" aria-label="ابحث عن وثيقة" /><button class="landing-start" id="landing-start" type="submit"><i data-lucide="sparkles"></i><span>ابدأ الآن</span></button></form>
+  <nav class="ln-bar"><img src="logo-full.png" alt="مِداد" /><button class="ln-btn js-start" type="button">ابدأ الآن</button></nav>
+
+  <div class="ln-hero">
+    <h1>وثائقك جاهزة،<br /><em>اطبعها بثقة.</em></h1>
+    <p>اختر وثيقتك من المكتبة، عدّل عليها ما تشاء، واطبعها في بيتك أو في أي مطبعة بدون أن تحتاج جهازًا خاصًا.</p>
+    <form class="landing-bar" id="landing-form"><input id="landing-q" type="text" placeholder="ما الوثيقة التي تريد طباعتها؟" aria-label="ابحث عن وثيقة" /><button class="landing-start" id="landing-start" type="submit"><i data-lucide="sparkles"></i><span>ابدأ الآن</span></button></form>
+    <div class="ln-note">🎁 نسخة مجانية لكل مستخدم جديد</div>
+
+    <div class="vid" aria-label="فيديو توضيحي لطريقة العمل" role="img">
+      <div class="scene s1"><div class="mini-grid"><div class="mc"><b>سيرة ذاتية</b><i></i><i></i></div><div class="mc hl"><b>فاتورة</b><i></i><i></i></div><div class="mc"><b>شهادة شكر</b><i></i><i></i></div></div><svg class="cur c1" viewBox="0 0 24 24"><path d="M4 2l16 9-7 2-3 7z" fill="#2b2e1c" stroke="#fff" stroke-width="1.5"/></svg></div>
+      <div class="scene s2"><div class="paper"><div class="pl w1"></div><div class="pl w2"></div><div class="typed">الاسم: أحمد بن علي</div><div class="pl w3"></div><div class="stamp">✓</div></div><div class="tools"><span>نص</span><span>أشكال</span><span>صورة</span><span>تراجع</span></div></div>
+      <div class="scene s3"><div class="printer"><div class="out"><i></i><i></i><i></i></div></div><div class="done">✓ تمت الطباعة</div><div class="minus">−1 ورقة</div></div>
+      <div class="caps"><span class="cp c1">١. اختر وثيقتك</span><span class="cp c2">٢. عدّل عليها بحرية</span><span class="cp c3">٣. اطبعها في أي مكان</span></div>
+      <div class="dots"><span></span><span></span><span></span></div>
     </div>
-  </section>
+  </div>
+
+  <div class="ln-sec rv"><h2>ثلاث خطوات فقط</h2>
+    <div class="steps"><div class="st"><b>1</b><h3>اختر</h3><p>مكتبة وثائق جاهزة في تصنيفات متعددة.</p></div><div class="st"><b>2</b><h3>عدّل</h3><p>أضف نصًا وأشكالًا وصورًا، وغيّر أي شيء.</p></div><div class="st"><b>3</b><h3>اطبع</h3><p>في بيتك، أو في مطبعة برمز QR.</p></div></div></div>
+
+  <div class="ln-sec rv"><h2>من مكتبتنا</h2><div class="marq"><div class="track"><div class="md"><b>سيرة ذاتية</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>فاتورة</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>شهادة شكر</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>عقد إيجار</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>طلب إجازة</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>استقالة</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>وصل استلام</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>تعهد</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>سيرة ذاتية</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>فاتورة</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>شهادة شكر</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>عقد إيجار</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>طلب إجازة</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>استقالة</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>وصل استلام</b><i></i><i></i><i></i><i></i><i></i></div><div class="md"><b>تعهد</b><i></i><i></i><i></i><i></i><i></i></div></div></div></div>
+
+  <div class="ln-sec rv"><h2>باقات بسيطة</h2><p class="sub">ابدأ مجانًا، ثم اختر ما يناسبك.</p>
+    <div class="prices"><div class="pc free"><small>للمستخدم الجديد</small><b>مجانًا</b><span>نسخة واحدة تجرّب بها أي وثيقة</span></div><div class="pc"><small>22 ورقة</small><b>200 دج</b><span>اشتراك شهري</span></div><div class="pc best"><small>38 ورقة</small><b>350 دج</b><span>الأكثر طلبًا</span></div><div class="pc"><small>غير محدود</small><b>600 دج</b><span>حتى 30 ورقة يوميًا</span></div></div></div>
+
+  <div class="ln-sec rv two"><div><h2>ما عندك طابعة؟</h2><p class="sub left">أعطِ المطبعة رمز QR واحدًا؛ تفتح وثيقتك وتطبع العدد الذي حددته فقط، دون أن ترسل لهم ملفك. الرمز صالح 24 ساعة.</p></div><div class="qrbox"><div class="qrg"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>رمز المطبعة</small></div></div>
+
+  <div class="ln-sec rv"><h2>محمية ومرتبطة بحسابك</h2>
+    <div class="steps"><div class="st"><h3>ترخيص شخصي</h3><p>كل وثيقة مرتبطة بحسابك أنت.</p></div><div class="st"><h3>علامة مائية</h3><p>تظهر على الشاشة فقط، ولا تُطبع مع النسخة.</p></div><div class="st"><h3>رصيد واضح</h3><p>ترى ما تبقى من أوراقك في كل وقت.</p></div></div></div>
+
+  <div class="ln-sec rv faq"><h2>أسئلة شائعة</h2>
+    <details><summary>هل أستطيع تعديل الوثيقة قبل الطباعة؟</summary><p>نعم، يمكنك إضافة نص وأشكال وصور وتغيير الغلاف، والتراجع عن أي خطوة.</p></details>
+    <details><summary>كيف أطبع في مطبعة؟</summary><p>تختار عدد النسخ فيُنشأ رمز QR مؤقت تعطيه لصاحب المطبعة.</p></details>
+    <details><summary>ماذا لو انتهى رصيدي؟</summary><p>تُنبَّه قبل الانتهاء بثلاثة أيام، وتجدد من نافذة الباقات متى شئت.</p></details>
+    <details><summary>هل تُحفظ تعديلاتي لو أغلقت الصفحة؟</summary><p>نعم، تُحفظ في متصفحك وتعود عند فتح الوثيقة من جديد.</p></details>
+    <details><summary>هل أحتاج دفع شيء للتجربة؟</summary><p>لا، لكل مستخدم جديد نسخة مجانية يختار بها أي وثيقة.</p></details></div>
+
+  <div class="ln-cta rv"><h2>جاهز؟ ابدأ بنسختك المجانية</h2><button class="landing-start js-start" type="button"><span>ابدأ الآن</span></button></div>
+</section>
   <header class="topbar">
     <a class="brand" href="#top" aria-label="مِداد - الرئيسية">
       <span class="brand-mark logo" role="img" aria-label="شعار مِداد"></span>
@@ -342,7 +374,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
   <script src="qr.js"></script>
-  <script type="module" src="app.js?v=34"></script>
+  <script type="module" src="app.js?v=35"></script>
 <div class="edit-dock is-hidden" id="edit-dock">
   <div class="dock-panel is-hidden" id="dock-panel"><div class="dock-tabs" id="dock-tabs"></div><div class="dock-body" id="dock-body"></div></div>
   <div class="dock-main">
