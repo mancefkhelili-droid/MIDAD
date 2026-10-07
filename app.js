@@ -2788,7 +2788,7 @@ function hideLanding() { document.body.classList.remove('landing-on'); }
 {
   const p = new URLSearchParams(window.location.search);
   if (p.get('shop') || p.get('status') || p.get('checkout') || p.get('order')) hideLanding();
-  $('#landing-start')?.addEventListener('click', () => openAuthDialog('login'));
+  $('#landing-form')?.addEventListener('submit', (e) => { e.preventDefault(); const q = $('#landing-q').value.trim(); if (q) { const s = $('#catalog-search'); if (s) { s.value = q; s.dispatchEvent(new Event('input')); } } openAuthDialog('login'); });
   supabase?.auth.getSession().then(({ data }) => { if (data?.session) hideLanding(); }).catch(() => {});
   supabase?.auth.onAuthStateChange((_e, session) => { if (session) { hideLanding(); window.scrollTo(0, 0); } else if (_e === 'SIGNED_OUT') document.body.classList.add('landing-on'); });
   window.setTimeout(() => { if (!supabase) hideLanding(); }, 0);
