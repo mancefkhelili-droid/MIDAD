@@ -626,6 +626,7 @@ function renderLicense(license) {
   if (contentEl && !license.document.storage_path) {
     contentEl.classList.remove('is-pdf');
     contentEl.replaceChildren(sanitizeDocumentHtml(license.document.content ?? ''));
+    restoreDraftHtml(license, contentEl);
   }
 
   setupInteractiveDocumentStudio(license);
@@ -859,6 +860,7 @@ function commitAnnots(immediate = false) {
     if (annotHist.length > 60) annotHist.shift();
     annotHistIdx = annotHist.length - 1;
     updateHistoryButtons();
+    saveDraftPdf(snap);
   };
   if (immediate) run(); else annotTimer = window.setTimeout(run, 400);
 }
@@ -1405,7 +1407,7 @@ async function renderPdfInto(container, path, license) {
       wrap.appendChild(pageEl);
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
     }
-    if (token === pdfRenderToken) { container.dataset.pdfReady = '1'; resetAnnotHistory(); }
+    if (token === pdfRenderToken) { container.dataset.pdfReady = '1'; restoreDraftPdf(); resetAnnotHistory(); }
   } catch (_) {
     if (token === pdfRenderToken) message('تعذر عرض ملف الوثيقة. حدّث الصفحة وحاول مرة أخرى.');
   }
@@ -1530,6 +1532,7 @@ $('#print-button')?.addEventListener('click', async () => {
     };
     window.addEventListener('afterprint', cleanupPrint, { once: true });
     window.setTimeout(cleanupPrint, 300000);
+    clearDraft();
     window.print();
   } catch (error) {
     setNotice(error.message || 'تعذر تنفيذ الطباعة الآن. حاول مرة أخرى.', 'error');
@@ -1647,6 +1650,7 @@ function renderSubscriptionStatus() {
     badge.classList.toggle('is-hidden', !has);
     if (has) badge.textContent = subSummary.unlimited ? `∞ • ${subSummary.daily_remaining} اليوم` : `${subSummary.remaining} ورقة`;
   }
+  checkExpiryReminder();
   const banner = $('#trial-banner');
   const status = $('#sub-status');
   if (banner) {
@@ -2096,6 +2100,7 @@ async function refreshAdminState(user) {
   }
   $('#admin-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#admin-manage-open')?.classList.toggle('is-hidden', !isAdmin);
+  $('#promos-open')?.classList.toggle('is-hidden', !isAdmin);
   if (userId && $('#profile-role')) $('#profile-role').textContent = isAdmin ? 'أدمن' : 'مشتري';
 }
 
@@ -2776,3 +2781,117 @@ $('#plans-open')?.addEventListener('click', openPlans);
 $('#plans-nav')?.addEventListener('click', (e) => { e.preventDefault(); openPlans(); });
 $('#sub-badge')?.addEventListener('click', openPlans);
 $('#plans-close')?.addEventListener('click', () => $('#plans-dialog')?.close());
+
+
+// ---------- Landing page ----------
+function hideLanding() { document.body.classList.remove('landing-on'); }
+{
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('shop') || p.get('status') || p.get('checkout') || p.get('order')) hideLanding();
+  $('#landing-start')?.addEventListener('click', () => openAuthDialog('login'));
+  supabase?.auth.getSession().then(({ data }) => { if (data?.session) hideLanding(); }).catch(() => {});
+  supabase?.auth.onAuthStateChange((_e, session) => { if (session) { hideLanding(); window.scrollTo(0, 0); } else if (_e === 'SIGNED_OUT') document.body.classList.add('landing-on'); });
+  window.setTimeout(() => { if (!supabase) hideLanding(); }, 0);
+}
+
+// ---------- Subscription expiry reminder ----------
+function checkExpiryReminder() {
+  try {
+    if (!currentUser || !subSummary?.has_subscription || !subSummary.expires_at) return;
+    const left = new Date(subSummary.expires_at).getTime() - Date.now();
+    if (left <= 0 || left > 3 * 86400000) return;
+    const key = 'medad-expiry-' + new Date().toDateString();
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    const days = Math.max(1, Math.ceil(left / 86400000));
+    showToast(`اشتراكك ينتهي خلال ${days === 1 ? 'يوم واحد' : days + ' أيام'}. جدّده من «الباقات» حتى لا ينقطع رصيدك.`, 'info');
+  } catch (_) {}
+}
+
+// ---------- Local autosave of edits ----------
+function draftKey() { return activeLicense && !activeLicense.isShop && activeLicense.document_id ? 'medad-draft:' + activeLicense.document_id : null; }
+function readDraft() { try { const k = draftKey(); return k ? JSON.parse(localStorage.getItem(k) || 'null') : null; } catch (_) { return null; } }
+function writeDraft(obj) { try { const k = draftKey(); if (k) localStorage.setItem(k, JSON.stringify({ ...obj, t: Date.now() })); } catch (_) {} }
+function clearDraft() { try { const k = draftKey(); if (k) localStorage.removeItem(k); } catch (_) {} }
+function saveDraftPdf(snap) {
+  if (!activeLicense?.document?.storage_path) return;
+  const empty = !JSON.parse(snap).some((l) => l.length);
+  if (empty) clearDraft(); else writeDraft({ annots: snap });
+}
+function restoreDraftPdf() {
+  const d = readDraft();
+  if (!d?.annots) return;
+  try {
+    const data = JSON.parse(d.annots);
+    document.querySelectorAll('.annot-layer').forEach((layer, i) => (data[i] || []).forEach((x) => buildAnnot(layer, x)));
+    showToast('استعدنا تعديلاتك السابقة على هذه الوثيقة.', 'success');
+  } catch (_) {}
+}
+function restoreDraftHtml(license, contentEl) {
+  const prev = activeLicense; activeLicense = license;
+  const d = readDraft(); activeLicense = prev;
+  if (d?.html) { contentEl.replaceChildren(sanitizeDocumentHtml(d.html)); showToast('استعدنا تعديلاتك السابقة على هذه الوثيقة.', 'success'); }
+}
+{
+  let t = null;
+  $('#document-content')?.addEventListener('input', () => {
+    if (activeLicense?.document?.storage_path) return;
+    window.clearTimeout(t);
+    t = window.setTimeout(() => writeDraft({ html: $('#document-content').innerHTML }), 800);
+  });
+}
+
+// ---------- Promo codes: user redeem ----------
+const PROMO_ERRORS = { invalid_code: 'الرمز غير صحيح أو منتهي.', already_used: 'استعملت هذا الرمز من قبل.', auth: 'سجّل الدخول أولًا.' };
+function rpcMsg(error, map) { const m = String(error?.message || ''); return Object.entries(map).find(([k]) => m.includes(k))?.[1] || 'تعذر تنفيذ الطلب. حاول مرة أخرى.'; }
+$('#promo-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#promo-input');
+  const code = input.value.trim();
+  if (!code) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { openAuthDialog('login'); return; }
+  const { data, error } = await supabase.rpc('redeem_promo_code', { p_code: code });
+  if (error) { showToast(rpcMsg(error, PROMO_ERRORS), 'error'); return; }
+  input.value = '';
+  showToast(`🎁 حصلت على ${data.sheets} ورقة مجانية، صالحة ${data.days} يومًا.`, 'success');
+  refreshSubscription(user);
+});
+
+// ---------- Promo codes: admin ----------
+const PROMO_ADMIN_ERRORS = { exists: 'هذا الرمز موجود مسبقًا.', bad_code: 'الرمز: حروف إنجليزية وأرقام و - _ فقط (3 إلى 32).', forbidden: 'ليست لديك صلاحية.' };
+async function loadPromos() {
+  const list = $('#promo-list');
+  const { data, error } = await supabase.rpc('admin_list_promos');
+  if (error || !Array.isArray(data)) { list.textContent = 'تعذر تحميل الرموز.'; return; }
+  list.replaceChildren();
+  if (!data.length) list.textContent = 'لا توجد رموز بعد.';
+  data.forEach((p) => {
+    const row = document.createElement('div');
+    row.className = 'admin-doc-row';
+    const info = document.createElement('div');
+    info.className = 'admin-doc-info';
+    const b = document.createElement('strong'); b.dir = 'ltr'; b.textContent = p.code;
+    const s = document.createElement('small'); s.textContent = `${p.sheets} ورقة • استُعمل ${p.uses}${p.max_uses ? ' / ' + p.max_uses : ''} • ${p.active ? 'فعّال' : 'موقوف'}`;
+    info.append(b, s);
+    const act = document.createElement('div'); act.className = 'admin-doc-actions';
+    const cp = document.createElement('button'); cp.type = 'button'; cp.className = 'admin-mini'; cp.textContent = 'نسخ الرسالة';
+    cp.addEventListener('click', () => { const t = `ضع الرمز ${p.code} في موقع مداد لتحصل على ${p.sheets} ورقة مجانًا 🎁`; navigator.clipboard?.writeText(t).then(() => showToast('تم نسخ الرسالة.', 'success')).catch(() => {}); $('#promo-msg').textContent = t; });
+    const tg = document.createElement('button'); tg.type = 'button'; tg.className = 'admin-mini'; tg.textContent = p.active ? 'إيقاف' : 'تفعيل';
+    tg.addEventListener('click', async () => { await supabase.rpc('admin_toggle_promo', { p_code: p.code, p_active: !p.active }); loadPromos(); });
+    act.append(cp, tg); row.append(info, act); list.append(row);
+  });
+}
+$('#promos-open')?.addEventListener('click', () => { if (!isAdmin) return; closeProfileDropdown(); $('#promo-dialog')?.showModal(); loadPromos(); });
+$('#promo-close')?.addEventListener('click', () => $('#promo-dialog')?.close());
+$('#promo-create')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { data, error } = await supabase.rpc('admin_create_promo', {
+    p_code: $('#promo-code').value, p_sheets: Number($('#promo-sheets').value), p_max_uses: Number($('#promo-max').value) || 0,
+    p_valid_days: Number($('#promo-days').value) || 30, p_expires: null, p_note: $('#promo-note').value || null });
+  if (error) { showToast(rpcMsg(error, PROMO_ADMIN_ERRORS), 'error'); return; }
+  $('#promo-msg').textContent = `ضع الرمز ${data.code} في موقع مداد لتحصل على ${$('#promo-sheets').value} ورقة مجانًا 🎁`;
+  $('#promo-code').value = '';
+  showToast('تم إنشاء الرمز.', 'success');
+  loadPromos();
+});

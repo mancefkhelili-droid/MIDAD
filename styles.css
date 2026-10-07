@@ -430,6 +430,20 @@ html,body{overflow-x:hidden;max-width:100%}
   .sub-badge{font-size:.7rem;padding:4px 8px}
 }
 
+.landing{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg,#fbf8f1)}
+body.landing-on .landing{display:flex}
+body.landing-on .topbar,body.landing-on main,body.landing-on footer,body.landing-on #edit-dock{display:none!important}
+.landing-card{max-width:560px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px}
+.landing-logo{width:150px;height:auto}
+.landing-card h1{font-size:clamp(2rem,7vw,3.2rem);line-height:1.2;margin:0}
+.landing-card p{margin:0;color:#6b6f55;line-height:1.9}
+.landing-start{padding:14px 34px;font-size:1.1rem}
+.landing-points{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.landing-points li{background:#eef1e0;border-radius:999px;padding:6px 14px;font-size:.88rem}
+.promo-redeem{display:flex;gap:8px;margin:0 0 14px}
+.promo-redeem input{flex:1;min-width:0;padding:10px 12px;border:1px solid #d6d9c0;border-radius:10px;background:transparent;color:inherit}
+.promo-msg{margin:10px 0;padding:10px;border-radius:10px;background:#eef1e0;font-size:.9rem;word-break:break-word}.promo-msg:empty{display:none}
+
 /* ---------- Dark mode (generated color overrides) ---------- */
 html[data-theme="dark"]{color-scheme:dark}
 html[data-theme="dark"]{--ink:#dbe0d1;--muted:#b4b4a6;--line:#433c2f;--paper:#141414;--warm:#221d11}
@@ -640,5 +654,13 @@ html[data-theme="dark"] .confirm-text{color:#dbe0d1}
 html[data-theme="dark"] .secondary-button{border:1px solid #433c2f;background:#221d11;color:#cdd2bc}
 html[data-theme="dark"] #wm-banner{background:#2a240b;color:#f4b087}
 html[data-theme="dark"] .oauth-button{color:#dbe0d1}
+html[data-theme="dark"] .landing{background:var(--bg,#221d11)}
+html[data-theme="dark"] .landing-card p{color:#bbbeab}
+html[data-theme="dark"] .landing-points li{background:#272a1a}
+html[data-theme="dark"] .promo-redeem input{border:1px solid #4f523d}
+html[data-theme="dark"] .promo-msg{background:#272a1a}
 
 html[data-theme="dark"] .brand-mark.logo{background:#e3d8b4}
+html[data-theme="dark"] .landing{background:#15170f}html[data-theme="dark"] .landing-points li,html[data-theme="dark"] .promo-msg{background:#262a1a}html[data-theme="dark"] .landing-card p{color:#b9bd9f}
+
+.landing-start{background:#535a34!important;color:#fff!important;border-color:#535a34!important}
