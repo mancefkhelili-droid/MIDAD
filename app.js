@@ -131,6 +131,8 @@ function addDocumentCardToCatalog(id, title, price, category = 'وثيقة مع�
     image.alt = `معاينة ${title}`;
     image.loading = 'lazy';
     image.decoding = 'async';
+    image.crossOrigin = 'anonymous';
+    image.addEventListener('load', () => smoothDownscale(image, 300), { once: true });
     const hint = document.createElement('span');
     hint.className = 'zoom-hint';
     hint.textContent = 'اضغط للتكبير';
@@ -2916,7 +2918,7 @@ function renderLandingGallery(docs) {
     const url = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
     if (url) {
       d.classList.add('has-img');
-      const img = document.createElement('img'); img.src = url; img.alt = ''; img.loading = 'lazy';
+      const img = document.createElement('img'); img.crossOrigin = 'anonymous'; img.addEventListener('load', () => smoothDownscale(img, 170), { once: true }); img.src = url; img.alt = ''; img.loading = 'lazy';
       d.append(img);
     }
     const b = document.createElement('b'); b.textContent = doc.title; d.append(b);
@@ -2927,4 +2929,28 @@ function renderLandingGallery(docs) {
   while (list.length < 8) list = list.concat(docs);
   const set = list.map(make);
   track.replaceChildren(...set, ...list.map(make));
+}
+
+// Shrinks big previews in halving steps so fine grids/lines don't turn into moiré ("overlapping" lines).
+function smoothDownscale(img, fallbackCss = 300) {
+  try {
+    if (img.dataset.sm) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const w = Math.round((img.clientWidth || fallbackCss) * dpr);
+    if (!w || img.naturalWidth <= w * 1.3) return;
+    img.dataset.sm = '1';
+    let cur = document.createElement('canvas');
+    cur.width = img.naturalWidth; cur.height = img.naturalHeight;
+    cur.getContext('2d').drawImage(img, 0, 0);
+    const step = (to) => {
+      const c = document.createElement('canvas');
+      c.width = to; c.height = Math.round(cur.height * to / cur.width);
+      const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+      x.drawImage(cur, 0, 0, c.width, c.height);
+      cur = c;
+    };
+    while (cur.width / 2 > w) step(Math.round(cur.width / 2));
+    step(w);
+    img.src = cur.toDataURL('image/jpeg', 0.92);
+  } catch (_) { /* tainted canvas or no support: keep the original */ }
 }
