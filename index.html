@@ -21,7 +21,7 @@
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=37" />
+  <link rel="stylesheet" href="styles-studio.css?v=40" />
 </head>
 <body class="landing-on">
   <section class="landing" id="landing" aria-label="مرحبًا بك في مداد">
@@ -240,8 +240,28 @@
             <div class="toolbar-divider"></div>
 
             <!-- أدوات الإضافة وإعادة الضبط -->
-            <div class="toolbar-group">
+            <div class="toolbar-group studio-actions">
               <button type="button" class="toolbar-btn" id="btn-add-paragraph" title="إضافة فقرة جديدة"><i data-lucide="plus-circle"></i> <span>فقرة</span></button>
+              <button type="button" class="toolbar-btn" id="btn-add-heading" title="إضافة عنوان"><i data-lucide="heading"></i> <span>عنوان</span></button>
+              <button type="button" class="toolbar-btn" id="btn-add-table" title="إضافة جدول"><i data-lucide="table-2"></i> <span>جدول</span></button>
+              <button type="button" class="toolbar-btn" id="btn-add-image" title="إضافة صورة"><i data-lucide="image-plus"></i> <span>صورة</span></button>
+              <button type="button" class="toolbar-btn" id="btn-page-break" title="فاصل صفحة"><i data-lucide="panel-top-dashed"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-find-replace" title="بحث واستبدال"><i data-lucide="search"></i></button>
+              <button type="button" class="toolbar-btn" id="btn-zoom-out" title="تصغير المعاينة">−</button>
+              <span class="studio-zoom" id="studio-zoom">100%</span>
+              <button type="button" class="toolbar-btn" id="btn-zoom-in" title="تكبير المعاينة">+</button>
+            </div>
+            <div class="studio-status" id="studio-status"><span class="studio-save-dot"></span><span id="studio-save-text">محفوظ محليًا</span><span class="studio-stats" id="studio-stats">0 كلمة</span></div>
+            <input id="studio-image-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            <div class="toolbar-group">
+              <div class="studio-layout-tools" aria-label="ترتيب العناصر">
+                <button type="button" class="toolbar-btn" id="btn-select-block" title="تحديد العنصر"><i data-lucide="mouse-pointer-2"></i><span>تحديد</span></button>
+                <button type="button" class="toolbar-btn" id="btn-move-up" title="تحريك العنصر للأعلى"><i data-lucide="arrow-up"></i></button>
+                <button type="button" class="toolbar-btn" id="btn-move-down" title="تحريك العنصر للأسفل"><i data-lucide="arrow-down"></i></button>
+                <button type="button" class="toolbar-btn" id="btn-duplicate-block" title="نسخ العنصر"><i data-lucide="copy"></i></button>
+                <button type="button" class="toolbar-btn danger" id="btn-delete-block" title="حذف العنصر"><i data-lucide="trash-2"></i></button>
+              </div>
+              <div class="toolbar-divider"></div>
               <button type="button" class="toolbar-btn" id="btn-add-recipient" title="تخصيص اسم المستفيد"><i data-lucide="user-check"></i> <span>المستفيد</span></button>
               <button type="button" class="toolbar-btn" id="btn-clear-format" title="إزالة جميع التنسيقات"><i data-lucide="remove-formatting"></i></button>
               <button type="button" class="toolbar-btn danger" id="btn-reset-doc" title="إعادة ضبط المحتوى للأصلي"><i data-lucide="rotate-ccw"></i></button>
@@ -316,6 +336,14 @@
       </div>
     </section>
 
+    <section class="recommendations-section is-hidden" id="recommendations-section" aria-labelledby="recommendations-title">
+      <div class="recommendations-heading">
+        <div><div class="section-kicker">مقترحات مِداد <span></span></div><h2 id="recommendations-title">قد تناسبك <em>هذه الوثائق أيضًا.</em></h2></div>
+        <p id="recommendations-subtitle">اقتراحات مبنية على الوثيقة التي فتحتها، لتكمل مجموعتك بدون بحث طويل.</p>
+      </div>
+      <div class="recommendations-grid" id="recommendations-grid"></div>
+    </section>
+
     <section class="workflow-section" id="how-it-works" aria-labelledby="workflow-title">
       <div class="workflow-heading"><div><div class="section-kicker">03 <span></span> رحلة آمنة</div><h2 id="workflow-title">من الدفع إلى الورق، <em>بوضوح.</em></h2></div><p>صممنا كل خطوة لتكون مفهومة، قابلة للتتبع، وآمنة.</p></div>
       <div class="workflow-grid">
@@ -328,6 +356,14 @@
 
   <dialog class="purchase-dialog plans-dialog" id="plans-dialog"><button class="dialog-close" id="plans-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">باقات شهرية</div><h2 id="plans-title">اطبع أكثر، وادفع أقل</h2><p class="dialog-subtitle">اشتراك شهري يمنحك رصيدًا من الأوراق تطبع به أي وثيقة في المكتبة، في بيتك أو في أي مطبعة.</p><div class="trial-banner is-hidden" id="trial-banner" role="status"></div><div class="sub-status is-hidden" id="sub-status" role="status"></div><form class="promo-redeem" id="promo-form"><input id="promo-input" type="text" dir="ltr" autocomplete="off" maxlength="32" placeholder="عندك رمز هدية؟ اكتبه هنا" aria-label="رمز الهدية" /><button class="admin-mini" type="submit">استلم</button></form><div class="plans-grid" id="plans-grid" aria-live="polite"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div></dialog>
   <dialog class="purchase-dialog confirm-dialog" id="confirm-dialog"><div class="section-kicker" id="confirm-kicker">تأكيد</div><p class="confirm-text" id="confirm-text"></p><div class="confirm-actions"><button class="primary-button" id="confirm-ok" type="button"><span>متابعة</span></button><button class="secondary-button" id="confirm-cancel" type="button">إلغاء</button></div></dialog>
+  <dialog id="studio-find-dialog" class="purchase-dialog studio-dialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-head"><div><small>MEDAD STUDIO</small><h3>بحث واستبدال</h3></div><button value="cancel" class="icon-close">×</button></div>
+      <div class="studio-find-grid"><label>البحث<input id="studio-find" type="text" autocomplete="off" /></label><label>استبدال بـ<input id="studio-replace" type="text" /></label></div>
+      <div class="dialog-actions"><button type="button" class="secondary-button" id="studio-find-next">التالي</button><button type="button" class="primary-button" id="studio-replace-one">استبدال</button><button type="button" class="primary-button" id="studio-replace-all">استبدال الكل</button></div>
+      <p class="studio-find-result" id="studio-find-result">ابحث داخل الوثيقة دون تغيير التنسيق.</p>
+    </form>
+  </dialog>
   <dialog class="purchase-dialog" id="purchase-dialog"><button class="dialog-close" id="purchase-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">شراء وثيقة</div><h2 id="purchase-title">اختر عدد النسخ</h2><p class="dialog-subtitle">كل نسخة لها رقم ضمن ترخيصك ويمكن طباعتها مرة واحدة.</p><div class="quantity-control"><button type="button" id="quantity-minus" aria-label="تقليل العدد"><i data-lucide="minus"></i></button><strong id="quantity-value">1</strong><button type="button" id="quantity-plus" aria-label="زيادة العدد"><i data-lucide="plus"></i></button></div><div class="quick-qty"><button type="button" data-qty="1">1</button><button type="button" data-qty="5">5</button><button type="button" data-qty="10">10</button></div><div class="purchase-total"><span>الإجمالي</span><strong><span id="purchase-total">120</span> دج</strong></div><p class="purchase-note">تدفع عبر Chargily، وتُفتح الوثيقة تلقائيًا بعد الدفع.</p><p class="purchase-feedback" id="purchase-feedback" role="status" aria-live="polite"></p><button class="primary-button full-button" id="start-provider-checkout" type="button"><span>المتابعة إلى الدفع</span><i data-lucide="arrow-left"></i></button></dialog>
   <dialog class="auth-dialog" id="auth-dialog"><button class="dialog-close" id="auth-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="user-round-plus"></i></div><div class="section-kicker">حساب المشتري</div><h2 id="auth-title">أنشئ حسابك لإتمام الشراء</h2><p class="dialog-subtitle" id="auth-subtitle">احفظ تراخيصك وعمليات الطباعة في حساب آمن.</p><form id="auth-form"><div class="consent-card" id="auth-consent-wrap"><input id="auth-consent" type="checkbox" /><label class="consent-text" for="auth-consent">أوافق على <button type="button" id="privacy-policy-link">سياسة الخصوصية وشروط الاستخدام</button> وأفهم أن كل ترخيص مرتبط بحسابي.</label></div><div class="captcha-box is-hidden" id="captcha-box"></div></form><div class="oauth-buttons"><button class="oauth-button" id="google-auth" type="button"><svg class="oauth-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Google</span></button><button class="oauth-button" id="github-auth" type="button"><svg class="oauth-logo" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></button></div><p class="auth-feedback" id="auth-feedback" role="status" aria-live="polite"></p></dialog>
   <dialog class="auth-dialog admin-dialog" id="promo-dialog"><button class="dialog-close" id="promo-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="dialog-icon"><i data-lucide="gift"></i></div><div class="section-kicker">لوحة الأدمن</div><h2>رموز الهدايا</h2><p class="dialog-subtitle">أنشئ رمزًا وانشره؛ من يُدخله يحصل على أوراق مجانية.</p><form id="promo-create"><label>الرمز (حروف إنجليزية وأرقام)<input id="promo-code" type="text" dir="ltr" maxlength="32" required placeholder="WELCOME10" /></label><label>عدد الأوراق المجانية<input id="promo-sheets" type="number" min="1" max="500" value="5" required /></label><label>أقصى عدد من يستعملونه (0 = بلا حد)<input id="promo-max" type="number" min="0" value="0" /></label><label>مدة صلاحية الأوراق بعد الاستلام (يوم)<input id="promo-days" type="number" min="1" max="365" value="30" /></label><label>ملاحظة داخلية (اختياري)<input id="promo-note" type="text" maxlength="120" /></label><button class="primary-button full-button" type="submit"><span>إنشاء الرمز</span><i data-lucide="plus"></i></button></form><div class="promo-msg" id="promo-msg"></div><div class="admin-doc-list" id="promo-list"></div><p class="auth-feedback" id="promo-feedback" role="status" aria-live="polite"></p></dialog>
@@ -368,7 +404,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
   <script src="qr.js"></script>
-  <script type="module" src="app.js?v=39"></script>
+  <script type="module" src="app-studio.js?v=40"></script>
 <div class="edit-dock is-hidden" id="edit-dock">
   <div class="dock-panel is-hidden" id="dock-panel"><div class="dock-tabs" id="dock-tabs"></div><div class="dock-body" id="dock-body"></div></div>
   <div class="dock-main">

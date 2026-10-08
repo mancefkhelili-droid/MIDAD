@@ -448,7 +448,7 @@ function sanitizeDocumentHtml(value) {
       if (classes.length) clean.setAttribute('class', classes.join(' '));
     }
     if (node.hasAttribute('style')) {
-      const safe = node.getAttribute('style').split(';').map((x) => x.trim()).filter((x) => /^(font-family|font-size|color|background-color|text-align|line-height|max-width|width|height|margin|padding|direction)\s*:/i.test(x)).join('; ');
+      const safe = node.getAttribute('style').split(';').map((x) => x.trim()).filter((x) => /^(font-family|font-size|color|background-color|text-align|line-height|max-width|width|height|margin|padding|direction|transform|opacity|border|border-radius|box-shadow)\s*:/i.test(x)).join('; ');
       if (safe) clean.setAttribute('style', safe);
     }
     if (node.tagName === 'IMG') {
@@ -3107,3 +3107,170 @@ function smoothDownscale(img, fallbackCss = 300) {
     img.src = cur.toDataURL('image/jpeg', 0.92);
   } catch (_) { /* tainted canvas or no support: keep the original */ }
 }
+
+/* =========================
+   MEDAD STUDIO — COMPLETE EDITOR LAYER
+   ========================= */
+(function MedadStudioPro(){
+  const $ = (s, r=document) => r.querySelector(s);
+  let selected = null;
+  let drag = null;
+  let panelReady = false;
+
+  const content = () => $('#document-content');
+  const editable = () => activeLicense && !activeLicense.isShop && !activeLicense.isAdmin;
+
+  function markDirty(){
+    const c=content(); if(!c) return;
+    c.dispatchEvent(new Event('input',{bubbles:true}));
+    try { studioSetSaveState?.('saving'); } catch(_){ }
+    clearTimeout(window.__medadStudioPersistTimer);
+    window.__medadStudioPersistTimer=setTimeout(()=>{
+      try { writeDraft?.({html:c.innerHTML, recipient:$('#document-recipient')?.innerHTML||''}); studioSetSaveState?.('saved'); } catch(_){ }
+    },350);
+  }
+
+  function clearSelection(){
+    document.querySelectorAll('#document-content > .studio-focus').forEach(e=>e.classList.remove('studio-focus'));
+    selected=null;
+    updatePanel();
+  }
+
+  function select(el){
+    if(!el || !content()?.contains(el)) return;
+    if(!editable()) return;
+    document.querySelectorAll('#document-content > .studio-focus').forEach(e=>e.classList.remove('studio-focus'));
+    selected=el;
+    el.classList.add('studio-focus');
+    try { selectStudioBlock?.(el); } catch(_){ }
+    updatePanel();
+  }
+
+  function getTextAlign(el){ return getComputedStyle(el).textAlign || 'right'; }
+  function setStyle(prop,val){ if(!selected) return; selected.style[prop]=val; markDirty(); updatePanel(); }
+
+  function panel(){
+    const body=$('#dock-body'); if(!body) return null;
+    if(panelReady) return body;
+    panelReady=true;
+    body.innerHTML=`
+      <div class="pro-panel">
+        <div class="pro-panel-head"><div><small>MEDAD STUDIO</small><strong>خصائص العنصر</strong></div><button type="button" id="pro-clear">إلغاء التحديد</button></div>
+        <div class="pro-empty" id="pro-empty">حدد فقرة أو عنوانًا أو صورة أو جدولًا داخل الورقة لتعديل خصائصه.</div>
+        <div class="pro-fields is-hidden" id="pro-fields">
+          <label>حجم الخط<input id="pro-size" type="number" min="8" max="96" step="1"></label>
+          <label>عرض العنصر<input id="pro-width" type="text" placeholder="100% أو 420px"></label>
+          <label>لون النص<input id="pro-color" type="color"></label>
+          <label>الخلفية<input id="pro-bg" type="color"></label>
+          <label>المحاذاة<select id="pro-align"><option value="right">يمين</option><option value="center">وسط</option><option value="left">يسار</option><option value="justify">ضبط</option></select></label>
+          <label>تباعد الأسطر<select id="pro-line"><option value="1.25">1.25</option><option value="1.5">1.5</option><option value="1.75">1.75</option><option value="2">2</option></select></label>
+          <label>الهامش العلوي<input id="pro-mt" type="number" min="0" max="120" step="1"></label>
+          <label>الهامش السفلي<input id="pro-mb" type="number" min="0" max="120" step="1"></label>
+          <div class="pro-actions"><button type="button" id="pro-duplicate">نسخ</button><button type="button" id="pro-up">↑</button><button type="button" id="pro-down">↓</button><button type="button" class="danger" id="pro-delete">حذف</button></div>
+        </div>
+      </div>`;
+    $('#pro-clear')?.addEventListener('click',clearSelection);
+    const bind=(id,fn)=>$('#'+id)?.addEventListener('input',fn);
+    bind('pro-size',e=>setStyle('fontSize',`${e.target.value}px`));
+    bind('pro-width',e=>setStyle('width',e.target.value));
+    bind('pro-color',e=>setStyle('color',e.target.value));
+    bind('pro-bg',e=>setStyle('backgroundColor',e.target.value));
+    bind('pro-align',e=>setStyle('textAlign',e.target.value));
+    bind('pro-line',e=>setStyle('lineHeight',e.target.value));
+    bind('pro-mt',e=>setStyle('marginTop',`${e.target.value}px`));
+    bind('pro-mb',e=>setStyle('marginBottom',`${e.target.value}px`));
+    $('#pro-duplicate')?.addEventListener('click',()=>{if(!selected)return;const x=selected.cloneNode(true);x.classList.remove('studio-focus');selected.after(x);select(x);markDirty();});
+    $('#pro-up')?.addEventListener('click',()=>{if(selected?.previousElementSibling){selected.parentElement.insertBefore(selected,selected.previousElementSibling);markDirty();}});
+    $('#pro-down')?.addEventListener('click',()=>{if(selected?.nextElementSibling){selected.parentElement.insertBefore(selected.nextElementSibling,selected);markDirty();}});
+    $('#pro-delete')?.addEventListener('click',()=>{if(!selected)return;if(content().children.length<=1){showToast('يجب أن تبقى في الوثيقة خانة واحدة على الأقل.','error');return;}selected.remove();selected=null;markDirty();updatePanel();});
+    return body;
+  }
+
+  function updatePanel(){
+    const b=panel(); if(!b) return;
+    const empty=$('#pro-empty',b), fields=$('#pro-fields',b);
+    if(!selected){empty?.classList.remove('is-hidden');fields?.classList.add('is-hidden');return;}
+    empty?.classList.add('is-hidden');fields?.classList.remove('is-hidden');
+    const cs=getComputedStyle(selected);
+    if($('#pro-size')) $('#pro-size').value=parseInt(cs.fontSize)||16;
+    if($('#pro-width')) $('#pro-width').value=selected.style.width||((selected.tagName==='IMG')?'100%':'auto');
+    if($('#pro-color')) $('#pro-color').value=rgbHex(cs.color,'#1c1f15');
+    if($('#pro-bg')) $('#pro-bg').value=rgbHex(cs.backgroundColor,'#ffffff');
+    if($('#pro-align')) $('#pro-align').value=getTextAlign(selected);
+    if($('#pro-line')) $('#pro-line').value=(parseFloat(cs.lineHeight)||1.5).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+    if($('#pro-mt')) $('#pro-mt').value=parseInt(cs.marginTop)||0;
+    if($('#pro-mb')) $('#pro-mb').value=parseInt(cs.marginBottom)||0;
+  }
+  function rgbHex(v,fallback){
+    const m=String(v||'').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); if(!m)return fallback;
+    return '#'+[m[1],m[2],m[3]].map(x=>Number(x).toString(16).padStart(2,'0')).join('');
+  }
+
+  function ensureDock(){
+    const dock=$('#edit-dock'); if(!dock)return;
+    const edit=$('#dock-edit');
+    edit?.addEventListener('click',()=>{ setTimeout(()=>{panel();updatePanel();},0); });
+  }
+
+  function startDrag(e,el){
+    if(!editable() || e.button!==0) return;
+    if(['INPUT','TEXTAREA','BUTTON','SELECT'].includes(e.target.tagName)) return;
+    if(e.target.closest('a')) return;
+    const rect=el.getBoundingClientRect();
+    drag={el,startX:e.clientX,startY:e.clientY,baseX:parseFloat(el.dataset.mdx||'0'),baseY:parseFloat(el.dataset.mdy||'0'),moved:false};
+    el.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+    const move=(ev)=>{
+      if(!drag)return;
+      const dx=ev.clientX-drag.startX,dy=ev.clientY-drag.startY;
+      if(Math.abs(dx)+Math.abs(dy)<4)return;
+      drag.moved=true;
+      const x=drag.baseX+dx,y=drag.baseY+dy;
+      el.dataset.mdx=x;el.dataset.mdy=y;
+      el.style.transform=`translate(${x}px, ${y}px)`;
+    };
+    const up=()=>{
+      if(!drag)return;
+      if(drag.moved) markDirty();
+      el.releasePointerCapture?.(e.pointerId);
+      drag=null;
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',up);
+    };
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up,{once:true});
+  }
+
+  function init(){
+    ensureDock();
+    document.addEventListener('click',e=>{
+      const c=content(); if(!c || !editable())return;
+      const el=e.target.closest('#document-content > *');
+      if(el){select(el);}
+    },true);
+    document.addEventListener('pointerdown',e=>{
+      const c=content(); if(!c || !editable())return;
+      const el=e.target.closest('#document-content > *');
+      if(!el)return;
+      // Drag only when Alt is held or on the element edge, so normal typing remains natural.
+      if(e.altKey || e.target.closest('.studio-drag-handle')) startDrag(e,el);
+    },true);
+    document.addEventListener('keydown',e=>{
+      if(!editable())return;
+      const c=content(); if(!c)return;
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();markDirty();showToast('تم حفظ تعديلاتك.','success');return;}
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'&&selected){e.preventDefault();const x=selected.cloneNode(true);selected.after(x);select(x);markDirty();}
+      if(e.key==='Escape'&&selected){clearSelection();}
+      if((e.key==='Delete'||e.key==='Backspace')&&selected && !window.getSelection()?.toString() && document.activeElement===c){
+        e.preventDefault(); if(c.children.length>1){selected.remove();selected=null;markDirty();updatePanel();}
+      }
+    });
+    // Add a subtle drag affordance without interfering with document text editing.
+    const observer=new MutationObserver(()=>{
+      content()?.querySelectorAll(':scope > *').forEach(el=>{if(!el.dataset.proReady){el.dataset.proReady='1';el.addEventListener('dblclick',()=>select(el));}});
+    });
+    if(content()) observer.observe(content(),{childList:true});
+    setTimeout(()=>{panel();updatePanel();},800);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
