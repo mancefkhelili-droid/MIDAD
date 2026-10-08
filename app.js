@@ -1647,6 +1647,7 @@ async function refreshSubscription(user) {
   }
   renderSubscriptionStatus();
   updateCardActions();
+  if (activeLicense?.isSub && subSummary) { activeLicense = { ...activeLicense, summary: subSummary }; renderSubCounters(activeLicense); }
 }
 
 function renderSubscriptionStatus() {
@@ -3105,3 +3106,16 @@ $('#pay-settings-form')?.addEventListener('submit', async (e) => {
   const { error } = await supabase.rpc('admin_update_manual_payment_settings', { p_account_name: $('#ps-name').value, p_ccp: $('#ps-ccp').value, p_rip: $('#ps-rip').value, p_note: $('#ps-note').value, p_telegram_chat_id: $('#ps-tg').value, p_telegram_enabled: $('#ps-tg-on').checked });
   showToast(error ? rpcMsg(error, MANUAL_ERRORS) : 'تم حفظ بيانات الحساب.', error ? 'error' : 'success');
 });
+
+// Keep the sheet counters honest: other devices, print-shop prints and the midnight reset all change them off-screen.
+{
+  let lastSync = 0;
+  const sync = () => {
+    if (!currentUser || document.hidden || Date.now() - lastSync < 20000) return;
+    lastSync = Date.now();
+    refreshSubscription(currentUser);
+  };
+  document.addEventListener('visibilitychange', sync);
+  window.addEventListener('focus', sync);
+  window.setInterval(sync, 60000);
+}
