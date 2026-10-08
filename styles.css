@@ -592,6 +592,13 @@ html[data-theme="dark"] .landing{background:#f9ecd8!important}
 .pay-settings{margin:10px 0}.pay-flag{color:#9a3b00}
 .pay-item{align-items:flex-start;flex-wrap:wrap}
 
+/* lighter dialogs: backdrop blur over a page full of images makes phones lag */
+dialog::backdrop,.privacy-dialog::backdrop,.purchase-dialog::backdrop,.upload-details-dialog::backdrop,.admin-login-dialog::backdrop,.auth-dialog::backdrop,.account-dialog::backdrop,.preview-dialog::backdrop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(28,31,21,.5)}
+
+.mp-alert{margin:2px 0 4px;padding:12px 14px;border-radius:12px;font-size:.95rem;line-height:1.7;font-weight:700}
+.mp-alert.error{background:#fdecea;border:1.5px solid #d9534f;color:#8a1f17}
+.mp-alert.info{background:#eef1e0;border:1px solid #c9ceab;color:#3d4426}
+
 /* ---------- Dark mode (generated color overrides) ---------- */
 html[data-theme="dark"]{color-scheme:dark}
 html[data-theme="dark"]{--ink:#dbe0d1;--muted:#b4b4a6;--line:#433c2f;--paper:#141414;--warm:#221d11}
@@ -861,5 +868,7 @@ html[data-theme="dark"] .plan-card.featured{background:#1f2215}
 html[data-theme="dark"] .pay-row{background:#2a1e0a;border:1px solid #584e36}
 html[data-theme="dark"] .pay-row span{color:#bbbeab}
 html[data-theme="dark"] .pay-flag{color:#ffb07f}
+html[data-theme="dark"] .mp-alert.error{background:#29110e;color:#ec958e}
+html[data-theme="dark"] .mp-alert.info{background:#272a1a;color:#d3dabc}
 
 html[data-theme="dark"] .brand-mark.logo{background:#e3d8b4}
