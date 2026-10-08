@@ -21,7 +21,7 @@
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=34" />
+  <link rel="stylesheet" href="styles.css?v=35" />
 </head>
 <body class="landing-on">
   <section class="landing" id="landing" aria-label="مرحبًا بك في مداد">
@@ -33,13 +33,7 @@
     <p>اختر وثيقتك من المكتبة، عدّل عليها ما تشاء، واطبعها في بيتك أو في أي مطبعة بدون أن تحتاج جهازًا خاصًا.</p>
     <form class="landing-bar" id="landing-form"><input id="landing-q" type="text" placeholder="ما الوثيقة التي تريد طباعتها؟" aria-label="ابحث عن وثيقة" /><button class="landing-start" id="landing-start" type="submit"><span>ابدأ</span><i data-lucide="arrow-left"></i></button></form>
     
-    <div class="vid" aria-label="فيديو توضيحي لطريقة العمل" role="img">
-      <div class="scene s1 real"><img class="shot pan1" src="shot-library.jpg" alt="" /></div>
-      <div class="scene s2"><div class="paper"><div class="pl w1"></div><div class="pl w2"></div><div class="typed">الاسم: أحمد بن علي</div><div class="pl w3"></div><div class="stamp">✓</div></div><div class="tools"><span>نص</span><span>أشكال</span><span>صورة</span><span>تراجع</span></div></div>
-      <div class="scene s3 real"><img class="shot pan3" src="shot-print.jpg" alt="" /><i class="ring"></i><div class="done">✓ تمت الطباعة</div><div class="minus">−1 ورقة</div></div>
-      <div class="caps"><span class="cp c1">١. اختر وثيقتك</span><span class="cp c2">٢. عدّل عليها بحرية</span><span class="cp c3">٣. اطبعها في أي مكان</span></div>
-      <div class="dots"><span></span><span></span><span></span></div>
-    </div>
+    <div class="ln-mini"><span><b>١</b> اختر وثيقتك</span><span><b>٢</b> عدّل عليها</span><span><b>٣</b> اطبعها في أي مكان</span></div>
   </div>
 
   <div class="ln-sec rv"><h2>ثلاث خطوات فقط</h2>
@@ -374,7 +368,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
   <script src="qr.js"></script>
-  <script type="module" src="app.js?v=37"></script>
+  <script type="module" src="app.js?v=38"></script>
 <div class="edit-dock is-hidden" id="edit-dock">
   <div class="dock-panel is-hidden" id="dock-panel"><div class="dock-tabs" id="dock-tabs"></div><div class="dock-body" id="dock-body"></div></div>
   <div class="dock-main">

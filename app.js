@@ -215,6 +215,7 @@ async function loadCatalogFromSupabase() {
       const previewUrl = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
       addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.summary || '', previewUrl, doc.sheets);
     });
+    renderLandingGallery(docs);
   } catch (_) {
     catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
   }
@@ -2904,4 +2905,26 @@ $('#promo-create')?.addEventListener('submit', async (e) => {
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
     els.forEach((e) => io.observe(e));
   }
+}
+
+function renderLandingGallery(docs) {
+  const track = $('#landing-track');
+  if (!track || !docs?.length) return;
+  const make = (doc) => {
+    const d = document.createElement('div');
+    d.className = 'md';
+    const url = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
+    if (url) {
+      d.classList.add('has-img');
+      const img = document.createElement('img'); img.src = url; img.alt = ''; img.loading = 'lazy';
+      d.append(img);
+    }
+    const b = document.createElement('b'); b.textContent = doc.title; d.append(b);
+    if (!url) for (let i = 0; i < 5; i += 1) d.append(document.createElement('i'));
+    return d;
+  };
+  let list = [...docs];
+  while (list.length < 8) list = list.concat(docs);
+  const set = list.map(make);
+  track.replaceChildren(...set, ...list.map(make));
 }
