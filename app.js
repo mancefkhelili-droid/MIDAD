@@ -296,7 +296,7 @@ async function loadAccountHistory() {
   licensesList.textContent = 'جارٍ تحميل التراخيص...';
   try {
     const [orderResult, licenseResult] = await Promise.all([
-      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,document_id,plan').order('created_at', { ascending: false }),
+      supabase.from('orders').select('id,calculated_price,copies_count,status,created_at,document_id,plan,payment_method,manual_receipt_path,manual_rejection_reason,manual_reference').order('created_at', { ascending: false }),
       supabase.from('print_licenses').select('id,license_key,document_id,remaining_prints,order_id').order('created_at', { ascending: false })
     ]);
     const titles = await fetchDocumentTitles([...(orderResult.data ?? []).map((o) => o.document_id), ...(licenseResult.data ?? []).map((l) => l.document_id)]);
@@ -308,7 +308,8 @@ async function loadAccountHistory() {
       if (summary) summary.textContent = `${orders.length} طلبات محفوظة في حسابك`;
       if (!orders.length) list.textContent = 'لا توجد طلبات بعد.';
       else list.replaceChildren(...orders.map((order) => {
-        const status = order.status === 'paid' ? 'مدفوع' : order.status === 'failed' ? 'فشل' : 'قيد الانتظار';
+        const manualPending = order.payment_method === 'manual' && order.status === 'pending';
+        const status = order.status === 'paid' ? 'مدفوع' : order.status === 'failed' ? 'مرفوض/فشل' : manualPending ? (order.manual_receipt_path ? 'قيد المراجعة' : 'بانتظار الإيصال') : 'قيد الانتظار';
         const article = document.createElement('article');
         article.className = 'order-item';
         const top = document.createElement('div');
@@ -323,6 +324,8 @@ async function loadAccountHistory() {
           ? `اشتراك شهري / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`
           : `${order.copies_count} نسخة / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`;
         article.append(top, details);
+        if (order.status === 'failed' && order.manual_rejection_reason) { const r = document.createElement('small'); r.textContent = 'سبب الرفض: ' + order.manual_rejection_reason; article.append(r); }
+        if (manualPending && !order.manual_receipt_path) { const b = document.createElement('button'); b.type = 'button'; b.className = 'admin-mini'; b.textContent = 'أكمل الدفع'; b.addEventListener('click', () => { $('#account-dialog')?.close(); openManualDialog({ order_id: order.id, manual_reference: order.manual_reference, amount: order.calculated_price }); }); article.append(b); }
         return article;
       }));
     }
@@ -1826,9 +1829,11 @@ function askShopCopies(max) {
   });
 }
 
+const PAYMENT_MODE = 'manual'; // 'manual' = CCP/BaridiMob with admin review, 'chargily' = online gateway
 class CheckoutError extends Error {}
 
 async function startCheckout(documentId, copiesCount, planCode = null) {
+  if (PAYMENT_MODE === 'manual') return startManualCheckout(documentId, copiesCount, planCode);
   if (!supabase) throw new CheckoutError('خدمة الدفع غير متاحة الآن. حاول مرة أخرى لاحقًا.');
   if (!planCode) {
     if (!documentId) throw new CheckoutError('هذه الوثيقة غير مربوطة بسجل الدفع.');
@@ -2104,6 +2109,7 @@ async function refreshAdminState(user) {
   $('#admin-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#admin-manage-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#promos-open')?.classList.toggle('is-hidden', !isAdmin);
+  $('#payments-open')?.classList.toggle('is-hidden', !isAdmin);
   if (userId && $('#profile-role')) $('#profile-role').textContent = isAdmin ? 'أدمن' : 'مشتري';
 }
 
@@ -2954,3 +2960,148 @@ function smoothDownscale(img, fallbackCss = 300) {
     img.src = cur.toDataURL('image/jpeg', 0.92);
   } catch (_) { /* tainted canvas or no support: keep the original */ }
 }
+
+
+// ---------- Manual payment (CCP / BaridiMob) ----------
+const MANUAL_ERRORS = {
+  duplicate_receipt: 'هذا الإيصال استُعمل من قبل في طلب آخر.',
+  duplicate_operation: 'رقم العملية هذا مسجّل في طلب آخر.',
+  receipt_older_than_order: 'تاريخ الإيصال أقدم من الطلب. حوّل المبلغ بعد إنشاء الطلب.',
+  bad_receipt_time: 'تاريخ التحويل غير صحيح.',
+  operation_required: 'اكتب رقم العملية كما في الإيصال.',
+  sender_required: 'اكتب اسمك كما في التحويل.',
+  receipt_required: 'أرفق صورة الإيصال.',
+  order_not_pending: 'هذا الطلب لم يعد بانتظار الدفع.',
+  order_not_found: 'الطلب غير موجود.',
+  plan_not_found: 'هذه الباقة لم تعد متاحة.',
+  document_not_found: 'هذه الوثيقة لم تعد متاحة للشراء.',
+  not_authenticated: 'سجّل الدخول أولًا.',
+  reason_required: 'اكتب سبب الرفض.',
+  forbidden: 'ليست لديك صلاحية.'
+};
+let manualOrder = null;
+
+async function startManualCheckout(documentId, copiesCount, planCode) {
+  if (!supabase) throw new CheckoutError('خدمة الدفع غير متاحة الآن.');
+  const { data, error } = await supabase.rpc('create_manual_order', { p_document_id: planCode ? null : documentId, p_copies: planCode ? null : copiesCount, p_plan: planCode || null });
+  if (error) throw new CheckoutError(rpcMsg(error, MANUAL_ERRORS));
+  $('#purchase-dialog')?.close();
+  $('#plans-dialog')?.close();
+  setNotice('', 'info');
+  await openManualDialog(data);
+}
+
+async function openManualDialog(order) {
+  manualOrder = order;
+  const box = $('#mp-box');
+  box.replaceChildren();
+  const { data: s } = await supabase.rpc('get_manual_payment_settings');
+  const rows = [['المبلغ', `${Number(order.amount)} دج`], ['رمز الطلب', order.manual_reference], ['اسم صاحب الحساب', s?.account_name], ['CCP', s?.ccp], ['RIP (بريدي موب)', s?.rip]];
+  rows.forEach(([label, value]) => {
+    if (!value) return;
+    const row = document.createElement('div'); row.className = 'pay-row';
+    const l = document.createElement('span'); l.textContent = label;
+    const v = document.createElement('b'); v.dir = 'ltr'; v.textContent = value;
+    const c = document.createElement('button'); c.type = 'button'; c.className = 'admin-mini'; c.textContent = 'نسخ';
+    c.addEventListener('click', () => { navigator.clipboard?.writeText(String(value).replace(/\s*دج$/, '')).then(() => showToast('تم النسخ.', 'success')).catch(() => {}); });
+    row.append(l, v, c); box.append(row);
+  });
+  if (!s?.ccp && !s?.rip) { const w = document.createElement('p'); w.textContent = 'لم تُضبط بيانات الحساب بعد. تواصل مع الدعم.'; box.append(w); }
+  $('#mp-note').textContent = (s?.note ? s.note + ' ' : '') + 'اكتب رمز الطلب في ملاحظة التحويل إن أمكن. تُراجَع العملية يدويًا.';
+  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  $('#mp-time').value = now.toISOString().slice(0, 16);
+  $('#manual-form').reset?.();
+  $('#mp-time').value = now.toISOString().slice(0, 16);
+  $('#mp-feedback').textContent = '';
+  $('#manual-dialog')?.showModal();
+}
+$('#manual-close')?.addEventListener('click', () => $('#manual-dialog')?.close());
+
+async function sha256Hex(file) {
+  const buf = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+$('#manual-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fb = $('#mp-feedback');
+  const btn = $('#mp-submit');
+  const file = $('#mp-file').files[0];
+  if (!manualOrder || !file) return;
+  if (file.size > 5 * 1024 * 1024) { fb.textContent = 'حجم الملف أكبر من 5 ميغابايت.'; return; }
+  btn.disabled = true; fb.textContent = 'جارٍ رفع الإيصال...';
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('not_authenticated');
+    const sha = await sha256Hex(file);
+    const ext = (file.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+    const path = `${user.id}/${manualOrder.order_id}-${Date.now()}.${ext}`;
+    const up = await supabase.storage.from('manual-receipts').upload(path, file, { contentType: file.type, upsert: false });
+    if (up.error) throw new Error('upload_failed');
+    const { error } = await supabase.rpc('submit_manual_payment', {
+      p_order_id: manualOrder.order_id, p_sender_name: $('#mp-sender').value, p_receipt_path: path, p_receipt_sha256: sha,
+      p_operation_no: $('#mp-op').value, p_receipt_time: new Date($('#mp-time').value).toISOString() });
+    if (error) { await supabase.storage.from('manual-receipts').remove([path]).catch(() => {}); throw error; }
+    supabase.functions.invoke('telegram-manual-payment', { body: { order_id: manualOrder.order_id } }).catch(() => {});
+    $('#manual-dialog')?.close();
+    showToast('وصلنا إيصالك. سيُفعَّل طلبك بعد المراجعة، وتجد حالته في «طلباتي».', 'success');
+    manualOrder = null;
+  } catch (err) {
+    fb.textContent = err.message === 'upload_failed' ? 'تعذر رفع الملف. حاول مرة أخرى.' : rpcMsg(err, MANUAL_ERRORS);
+  } finally { btn.disabled = false; }
+});
+
+// ---------- Manual payment: admin review ----------
+async function loadPayments() {
+  const list = $('#payments-list');
+  list.textContent = 'جارٍ التحميل...';
+  const { data, error } = await supabase.rpc('admin_list_manual_payments_v2');
+  if (error || !Array.isArray(data)) { list.textContent = 'تعذر تحميل الطلبات.'; return; }
+  list.replaceChildren();
+  if (!data.length) list.textContent = 'لا توجد طلبات دفع.';
+  for (const p of data) {
+    const row = document.createElement('div'); row.className = 'admin-doc-row pay-item';
+    const info = document.createElement('div'); info.className = 'admin-doc-info';
+    const t = document.createElement('strong'); t.textContent = `${p.manual_reference} • ${Number(p.amount)} دج • ${p.plan ? 'اشتراك ' + p.plan : (p.document_title || 'وثيقة')}`;
+    const s1 = document.createElement('small'); s1.textContent = `${p.user_email} • المرسل: ${p.manual_sender_name || '—'}`;
+    const s2 = document.createElement('small'); s2.dir = 'ltr'; s2.textContent = `op: ${p.operation_no || '—'} • ${p.receipt_time ? new Date(p.receipt_time).toLocaleString('fr-DZ') : ''}`;
+    const s3 = document.createElement('small'); s3.textContent = p.status === 'paid' ? '✅ مقبول' : p.status === 'failed' ? `❌ مرفوض: ${p.rejection_reason || ''}` : (p.manual_receipt_path ? '⏳ بانتظار قرارك' : 'بلا إيصال بعد');
+    info.append(t, s1, s2, s3);
+    (p.flags || []).forEach((f) => { const w = document.createElement('small'); w.className = 'pay-flag'; w.textContent = '⚠ ' + f; info.append(w); });
+    const act = document.createElement('div'); act.className = 'admin-doc-actions';
+    if (p.manual_receipt_path) {
+      const view = document.createElement('button'); view.type = 'button'; view.className = 'admin-mini'; view.textContent = 'الإيصال';
+      view.addEventListener('click', async () => { const { data: u } = await supabase.storage.from('manual-receipts').createSignedUrl(p.manual_receipt_path, 300); if (u?.signedUrl) window.open(u.signedUrl, '_blank', 'noopener'); });
+      act.append(view);
+    }
+    if (p.status === 'pending' && p.manual_receipt_path) {
+      const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'admin-mini'; ok.textContent = 'قبول';
+      ok.addEventListener('click', async () => {
+        if (!(await askConfirm(`هل وجدت العملية ${p.operation_no} بمبلغ ${Number(p.amount)} دج في حسابك؟`, 'نعم، اقبل', 'تأكيد القبول'))) return;
+        const { error: e1 } = await supabase.rpc('admin_approve_manual_payment', { p_order_id: p.order_id });
+        showToast(e1 ? rpcMsg(e1, MANUAL_ERRORS) : 'تم القبول وتفعيل الطلب.', e1 ? 'error' : 'success'); loadPayments();
+      });
+      const no = document.createElement('button'); no.type = 'button'; no.className = 'admin-mini'; no.textContent = 'رفض';
+      no.addEventListener('click', async () => {
+        const reason = window.prompt('سبب الرفض (يظهر للزبون):'); if (!reason) return;
+        const { error: e2 } = await supabase.rpc('admin_reject_manual_payment', { p_order_id: p.order_id, p_reason: reason });
+        showToast(e2 ? rpcMsg(e2, MANUAL_ERRORS) : 'تم الرفض.', e2 ? 'error' : 'success'); loadPayments();
+      });
+      act.append(ok, no);
+    }
+    row.append(info, act); list.append(row);
+  }
+}
+async function loadPaySettings() {
+  const { data } = await supabase.from('payment_settings').select('account_name,ccp,rip,note,telegram_chat_id,telegram_enabled').eq('id', true).maybeSingle();
+  if (!data) return;
+  $('#ps-name').value = data.account_name || ''; $('#ps-ccp').value = data.ccp || ''; $('#ps-rip').value = data.rip || '';
+  $('#ps-note').value = data.note || ''; $('#ps-tg').value = data.telegram_chat_id || ''; $('#ps-tg-on').checked = Boolean(data.telegram_enabled);
+}
+$('#payments-open')?.addEventListener('click', () => { if (!isAdmin) return; closeProfileDropdown(); $('#payments-dialog')?.showModal(); loadPayments(); loadPaySettings(); });
+$('#payments-close')?.addEventListener('click', () => $('#payments-dialog')?.close());
+$('#pay-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { error } = await supabase.rpc('admin_update_manual_payment_settings', { p_account_name: $('#ps-name').value, p_ccp: $('#ps-ccp').value, p_rip: $('#ps-rip').value, p_note: $('#ps-note').value, p_telegram_chat_id: $('#ps-tg').value, p_telegram_enabled: $('#ps-tg-on').checked });
+  showToast(error ? rpcMsg(error, MANUAL_ERRORS) : 'تم حفظ بيانات الحساب.', error ? 'error' : 'success');
+});
