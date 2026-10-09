@@ -601,6 +601,29 @@ dialog::backdrop,.privacy-dialog::backdrop,.purchase-dialog::backdrop,.upload-de
 
 .is-wait{opacity:.65;pointer-events:none}
 
+.lang-sw{display:inline-flex;border:1px solid rgba(83,90,52,.35);border-radius:999px;overflow:hidden;font-size:.72rem;direction:ltr}
+.lang-sw button{border:0;background:transparent;color:inherit;padding:.28rem .55rem;cursor:pointer;font:inherit;font-weight:600;letter-spacing:.03em}
+.lang-sw button.on{background:#535a34;color:#fff}
+.ln-right{display:inline-flex;align-items:center;gap:.6rem}
+html[dir=ltr] body{text-align:left}
+html[dir=ltr] *,html[dir=ltr] *::before,html[dir=ltr] *::after{direction:ltr!important}
+html[dir=ltr] .lang-sw{direction:ltr}
+html[dir=ltr] .mp-alert,html[dir=ltr] .notice{text-align:left}
+html[dir=ltr] .st,html[dir=ltr] .md,html[dir=ltr] .two,html[dir=ltr] .faq,html[dir=ltr] .profile-menu-item,html[dir=ltr] .profile-email{text-align:left}
+html[dir=ltr] .ln-mini{flex-wrap:wrap}
+html[dir=ltr] .ln-mini span{white-space:normal}
+html[dir=ltr] dialog .dialog-close,html[dir=ltr] dialog [class*="close"]{left:auto;right:14px}
+.cat-chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.cat-chip{border:1px solid #d9d3bd;background:#fff8ec;color:#535a34;border-radius:999px;padding:7px 14px;font:600 .82rem inherit;font-family:inherit;cursor:pointer}
+.cat-chip.on{background:#535a34;color:#fff;border-color:#535a34}
+.cats-form{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin:12px 0}
+.cats-form input,.cats-form select,.cat-select,.cat-row input{padding:10px;border:1px solid #dbd8d1;border-radius:9px;font:14px 'Tajawal',sans-serif;background:#fff;width:100%}
+.cat-select{display:block;margin-top:6px}
+.cat-row{display:grid;grid-template-columns:1fr;gap:6px;padding:10px 0;border-top:1px solid #ece6dc}
+.cat-row .admin-mini{justify-self:start}
+@media(min-width:700px){.cat-row{grid-template-columns:1fr 1fr 1fr auto auto;align-items:center}}
+.admin-mini.danger{color:#b91c1c}
+
 /* ---------- Dark mode (generated color overrides) ---------- */
 html[data-theme="dark"]{color-scheme:dark}
 html[data-theme="dark"]{--ink:#dbe0d1;--muted:#b4b4a6;--line:#433c2f;--paper:#141414;--warm:#221d11}
@@ -872,5 +895,10 @@ html[data-theme="dark"] .pay-row span{color:#bbbeab}
 html[data-theme="dark"] .pay-flag{color:#ffb07f}
 html[data-theme="dark"] .mp-alert.error{background:#29110e;color:#ec958e}
 html[data-theme="dark"] .mp-alert.info{background:#272a1a;color:#d3dabc}
+html[data-theme="dark"] .cat-chip{background:#2a1e0a;color:#ccd2b2}
+html[data-theme="dark"] .cats-form input,html[data-theme="dark"] .cats-form select,html[data-theme="dark"] .cat-select,html[data-theme="dark"] .cat-row input{border:1px solid #46433d;background:#141414}
+html[data-theme="dark"] .cat-row{border-top:1px solid #433c2f}
+html[data-theme="dark"] .admin-mini.danger{color:#ea7676}
 
 html[data-theme="dark"] .brand-mark.logo{background:#e3d8b4}
+html[data-theme="dark"] .lang-sw button.on{background:#e3d8b4;color:#222}

@@ -112,13 +112,75 @@ function resetCaptcha() {
 }
 let activeLicense = null;
 
-function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', summary = '', previewUrl = '', sheets = 1) {
+// ---------- Library categories (names stored in ar/fr/en, chosen by the admin) ----------
+let categories = [];
+let catFilter = null;
+const curLang = () => window.MedadI18n?.lang || 'ar';
+const catName = (c) => (c ? c['name_' + curLang()] || c.name_ar : '');
+const catById = (id) => categories.find((c) => c.id === id);
+const L3 = (ar, fr, en) => ({ ar, fr, en })[curLang()];
+async function loadCategories() {
+  if (!supabase) return;
+  try {
+    const { data } = await supabase.from('categories').select('*').order('sort_order').order('created_at');
+    categories = data || [];
+  } catch (_) { categories = []; }
+  fillCategorySelects();
+}
+function fillCategorySelects(sel) {
+  const targets = sel ? [sel] : [...document.querySelectorAll('select.cat-select')];
+  targets.forEach((s) => {
+    const cur = s.value || s.dataset.value || '';
+    s.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: L3('بدون تصنيف', 'Sans catégorie', 'No category') }));
+    categories.forEach((c) => s.appendChild(Object.assign(document.createElement('option'), { value: c.id, textContent: catName(c) })));
+    s.value = cur;
+  });
+}
+function renderCatChips() {
+  const box = $('#cat-chips');
+  if (!box) return;
+  const used = new Set([...document.querySelectorAll('.document-catalog .catalog-card')].map((c) => c.dataset.cat).filter(Boolean));
+  const list = categories.filter((c) => used.has(c.id));
+  if (catFilter && !used.has(catFilter)) catFilter = null;
+  box.classList.toggle('is-hidden', list.length < 1);
+  box.replaceChildren();
+  const mk = (id, label) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'cat-chip' + (catFilter === id ? ' on' : ''); b.textContent = label;
+    b.addEventListener('click', () => { catFilter = id; renderCatChips(); applyCatalogFilter(); });
+    box.appendChild(b);
+  };
+  mk(null, L3('الكل', 'Tout', 'All'));
+  list.forEach((c) => mk(c.id, catName(c)));
+}
+function applyCatalogFilter() {
+  const q = ($('#catalog-search')?.value || '').trim().toLowerCase();
+  document.querySelectorAll('.document-catalog .catalog-card').forEach((card) => {
+    const okCat = !catFilter || card.dataset.cat === catFilter;
+    const okQ = !q || card.textContent.toLowerCase().includes(q);
+    card.style.display = okCat && okQ ? '' : 'none';
+  });
+}
+window.addEventListener('medad-lang', () => {
+  document.querySelectorAll('.catalog-card[data-cat]').forEach((card) => {
+    const t = card.querySelector('.catalog-type');
+    const c = catById(card.dataset.cat);
+    if (t && c) t.textContent = catName(c);
+  });
+  document.querySelectorAll('.cat-chip,.cat-row').length && (renderCatChips(), typeof renderCatManager === 'function' && renderCatManager());
+  fillCategorySelects();
+});
+
+function addDocumentCardToCatalog(id, title, price, category = 'وثيقة معتمدة', summary = '', previewUrl = '', sheets = 1, categoryId = null) {
+  const cobj = categoryId ? catById(categoryId) : null;
+  if (cobj) category = catName(cobj);
   documentCatalog[id] = { title, price: Number(price), category, document_id: id, summary, previewUrl, sheets: Number(sheets) || 1 };
   const existingCard = document.querySelector(`.catalog-card[data-document="${id}"]`);
   if (existingCard) existingCard.remove();
   const card = document.createElement('article');
   card.className = 'catalog-card uploaded-catalog-card';
   card.dataset.document = id;
+  if (cobj) card.dataset.cat = cobj.id;
   let preview;
   if (previewUrl) {
     // Real first-page preview: a normal block above the text (never overlaps it), shown whole.
@@ -202,7 +264,8 @@ async function loadCatalogFromSupabase() {
     return;
   }
   try {
-    const { data: docs, error } = await supabase.from('documents').select('id, title, summary, price_per_copy, preview_path, is_published, sheets').eq('is_published', true).order('created_at', { ascending: false });
+    if (!categories.length) await loadCategories();
+    const { data: docs, error } = await supabase.from('documents').select('id, title, summary, price_per_copy, preview_path, is_published, sheets, category_id').eq('is_published', true).order('created_at', { ascending: false });
     if (error || !docs) {
       catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
       return;
@@ -215,8 +278,10 @@ async function loadCatalogFromSupabase() {
     $('#catalog-search')?.classList.toggle('is-hidden', docs.length < 8);
     docs.forEach((doc) => {
       const previewUrl = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
-      addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.summary || '', previewUrl, doc.sheets);
+      addDocumentCardToCatalog(doc.id, doc.title, doc.price_per_copy, 'وثيقة معتمدة', doc.summary || '', previewUrl, doc.sheets, doc.category_id);
     });
+    renderCatChips();
+    applyCatalogFilter();
     renderLandingGallery(docs);
   } catch (_) {
     catalog.textContent = 'تعذر تحميل الوثائق. تحقق من اتصالك ثم أعد المحاولة.';
@@ -321,8 +386,8 @@ async function loadAccountHistory() {
         top.append(title, state);
         const details = document.createElement('small');
         details.textContent = order.plan
-          ? `اشتراك شهري / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`
-          : `${order.copies_count} نسخة / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString('ar-DZ')}`;
+          ? `اشتراك شهري / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString((window.__locale || 'ar-DZ'))}`
+          : `${order.copies_count} نسخة / ${order.calculated_price} دج / ${new Date(order.created_at).toLocaleDateString((window.__locale || 'ar-DZ'))}`;
         article.append(top, details);
         if (order.status === 'failed' && order.manual_rejection_reason) { const r = document.createElement('small'); r.textContent = 'سبب الرفض: ' + order.manual_rejection_reason; article.append(r); }
         if (manualPending && !order.manual_receipt_path) { const b = document.createElement('button'); b.type = 'button'; b.className = 'admin-mini'; b.textContent = 'أكمل الدفع'; b.addEventListener('click', () => { $('#account-dialog')?.close(); openManualDialog({ order_id: order.id, manual_reference: order.manual_reference, amount: order.calculated_price }); }); article.append(b); }
@@ -674,7 +739,7 @@ function renderLicense(license) {
   const wmInfo = 'العلامة المائية باسم بريدك تظهر على الشاشة فقط ولن تُطبع.';
   if (license.isAdmin) setNotice(`وضع الأدمن: تعرض وتطبع أي وثيقة بدون دفع وبدون خصم نسخ. ${wmInfo}`, 'info');
   else if (license.isSub) setNotice(`تم فتح الوثيقة من اشتراكك. كل طباعة تخصم ${license.sheets} ورقة من رصيدك. ${wmInfo}`, 'success');
-  else if (license.isShop) setNotice(`وضع المطبعة: فتح الوثيقة لا يخصم شيئًا، وتُخصم نسخة واحدة من ترخيص الزبون عند كل طباعة (المتبقي ${remaining})${license.shopExpiresAt ? ` ، والرمز صالح حتى ${new Date(license.shopExpiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}. ${wmInfo}`, 'success');
+  else if (license.isShop) setNotice(`وضع المطبعة: فتح الوثيقة لا يخصم شيئًا، وتُخصم نسخة واحدة من ترخيص الزبون عند كل طباعة (المتبقي ${remaining})${license.shopExpiresAt ? ` ، والرمز صالح حتى ${new Date(license.shopExpiresAt).toLocaleString((window.__locale || 'ar-DZ'), { dateStyle: 'medium', timeStyle: 'short' })}` : ''}. ${wmInfo}`, 'success');
   else setNotice(isPdf ? `تم تفعيل المستند. أضف نصًا فوق الملف أينما تريد من شريط الأدوات ثم اطبع. ${wmInfo}` : `تم تفعيل المستند بنجاح. يمكنك تعديله قبل الطباعة. ${wmInfo}`, 'success');
   window.lucide?.createIcons();
 }
@@ -1668,7 +1733,7 @@ function renderSubscriptionStatus() {
   if (status) {
     const sm = subSummary;
     if (sm?.has_subscription) {
-      const until = sm.expires_at ? new Date(sm.expires_at).toLocaleDateString('ar-DZ', { dateStyle: 'medium' }) : '';
+      const until = sm.expires_at ? new Date(sm.expires_at).toLocaleDateString((window.__locale || 'ar-DZ'), { dateStyle: 'medium' }) : '';
       status.textContent = `اشتراكك فعّال: ${sm.unlimited ? `غير محدود (المتبقي اليوم ${sm.daily_remaining} من ${sm.daily_limit} ورقة)` : `${sm.remaining} ورقة متبقية`}${until ? ` • ينتهي ${until}` : ''}`;
       status.classList.remove('is-hidden');
     } else {
@@ -2109,6 +2174,7 @@ async function refreshAdminState(user) {
   }
   $('#admin-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#admin-manage-open')?.classList.toggle('is-hidden', !isAdmin);
+  $('#cats-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#promos-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#payments-open')?.classList.toggle('is-hidden', !isAdmin);
   if (userId && $('#profile-role')) $('#profile-role').textContent = isAdmin ? 'أدمن' : 'مشتري';
@@ -2259,7 +2325,7 @@ $('#admin-form')?.addEventListener('submit', async (event) => {
       }
     }
     const { error } = await supabase.from('documents').insert({
-      id, title, price_per_copy: price, summary: summary || null,
+      id, title, price_per_copy: price, summary: summary || null, category_id: $('#admin-category')?.value || null,
       content: pdfFile ? '' : content, storage_path: storagePath, preview_path: previewPath,
       sheets: pdfFile ? Math.min(500, Math.max(1, adminLastPages)) : 1,
       is_published: $('#admin-publish').checked
@@ -2370,6 +2436,7 @@ function buildAdminRow(doc) {
     priceInput.type = 'number'; priceInput.min = '50'; priceInput.max = '1000000'; priceInput.step = '1'; priceInput.required = true; priceInput.value = doc.price_per_copy;
     const summaryInput = document.createElement('input');
     summaryInput.type = 'text'; summaryInput.maxLength = 300; summaryInput.value = doc.summary ?? '';
+    const catSel = document.createElement('select'); catSel.className = 'cat-select'; catSel.dataset.value = doc.category_id || ''; fillCategorySelects(catSel); catSel.value = doc.category_id || '';
     const buttons = document.createElement('div');
     buttons.className = 'admin-doc-actions';
     const save = document.createElement('button');
@@ -2378,7 +2445,7 @@ function buildAdminRow(doc) {
     cancel.type = 'button'; cancel.className = 'admin-mini'; cancel.textContent = 'إلغاء';
     cancel.addEventListener('click', () => loadAdminDocuments());
     buttons.append(save, cancel);
-    form.append(field('العنوان', titleInput), field('السعر لكل نسخة (دج)', priceInput), field('الوصف القصير', summaryInput), buttons);
+    form.append(field('العنوان', titleInput), field('السعر لكل نسخة (دج)', priceInput), field('الوصف القصير', summaryInput), field('التصنيف', catSel), buttons);
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const title = titleInput.value.trim();
@@ -2388,7 +2455,7 @@ function buildAdminRow(doc) {
       if (!Number.isInteger(price) || price < 50 || price > 1000000) return setManageFeedback('السعر يجب أن يكون عددًا صحيحًا بين 50 و1000000 دج.', 'error');
       if (summary.length > 300) return setManageFeedback('الوصف لا يتجاوز 300 حرف.', 'error');
       save.disabled = true;
-      const { error } = await supabase.from('documents').update({ title, price_per_copy: price, summary: summary || null }).eq('id', doc.id);
+      const { error } = await supabase.from('documents').update({ title, price_per_copy: price, summary: summary || null, category_id: catSel.value || null }).eq('id', doc.id);
       if (error) {
         setManageFeedback('تعذر حفظ التعديلات. حاول مرة أخرى.', 'error');
         save.disabled = false;
@@ -2435,6 +2502,75 @@ $('#admin-manage-open')?.addEventListener('click', () => {
   loadAdminDocuments();
 });
 $('#admin-manage-close')?.addEventListener('click', () => $('#admin-manage-dialog')?.close());
+
+// ---------- Category manager (admin) ----------
+async function autoTranslate(text, from, to) {
+  if (from === to) return text;
+  try {
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+    const j = await r.json();
+    const t = j?.responseData?.translatedText;
+    if (t && !/MYMEMORY|INVALID|QUERY LENGTH/i.test(t)) return t;
+  } catch (_) { /* fall back below */ }
+  return null;
+}
+function catMsg(m, type = '') { const f = $('#cats-feedback'); if (f) { f.textContent = m; f.className = 'auth-feedback ' + type; } }
+function renderCatManager() {
+  const list = $('#cats-list');
+  if (!list) return;
+  list.replaceChildren();
+  categories.forEach((c) => {
+    const row = document.createElement('div'); row.className = 'cat-row';
+    const ins = ['ar', 'fr', 'en'].map((l) => { const i = document.createElement('input'); i.type = 'text'; i.maxLength = 80; i.value = c['name_' + l]; i.dir = l === 'ar' ? 'rtl' : 'ltr'; i.placeholder = l.toUpperCase(); return i; });
+    const save = document.createElement('button'); save.type = 'button'; save.className = 'admin-mini'; save.textContent = L3('حفظ', 'Enregistrer', 'Save');
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'admin-mini danger'; del.textContent = L3('حذف', 'Supprimer', 'Delete');
+    save.addEventListener('click', async () => {
+      const [ar, fr, en] = ins.map((i) => i.value.trim());
+      if (!ar || !fr || !en) return catMsg(L3('أكمل الأسماء الثلاثة.', 'Complétez les trois noms.', 'Fill in all three names.'), 'error');
+      const { error } = await supabase.from('categories').update({ name_ar: ar, name_fr: fr, name_en: en }).eq('id', c.id);
+      if (error) return catMsg(L3('تعذر الحفظ.', 'Échec de l’enregistrement.', 'Could not save.'), 'error');
+      catMsg(L3('تم الحفظ.', 'Enregistré.', 'Saved.'), 'success'); await loadCategories(); renderCatManager(); renderCatChips(); loadCatalogFromSupabase();
+    });
+    del.addEventListener('click', async () => {
+      if (!(await askConfirm(L3('حذف هذا التصنيف؟ ستبقى وثائقه بدون تصنيف.', 'Supprimer cette catégorie ? Ses documents resteront sans catégorie.', 'Delete this category? Its documents will stay uncategorised.')))) return;
+      const { error } = await supabase.from('categories').delete().eq('id', c.id);
+      if (error) return catMsg(L3('تعذر الحذف.', 'Échec de la suppression.', 'Could not delete.'), 'error');
+      await loadCategories(); renderCatManager(); loadCatalogFromSupabase();
+    });
+    row.append(...ins, save, del);
+    list.appendChild(row);
+  });
+}
+$('#cats-open')?.addEventListener('click', async () => {
+  if (!isAdmin) return;
+  closeProfileDropdown();
+  catMsg('');
+  $('#cats-dialog')?.showModal();
+  await loadCategories(); renderCatManager();
+});
+$('#cats-close')?.addEventListener('click', () => $('#cats-dialog')?.close());
+$('#cats-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!isAdmin) return;
+  const name = $('#cats-name').value.trim();
+  if (!name) return;
+  const src = $('#cats-src').value;
+  const btn = $('#cats-add'); btn.disabled = true;
+  catMsg(L3('جارٍ الترجمة...', 'Traduction…', 'Translating…'));
+  const out = { ar: name, fr: name, en: name };
+  let failed = false;
+  for (const l of ['ar', 'fr', 'en']) {
+    if (l === src) { out[l] = name; continue; }
+    const t = await autoTranslate(name, src, l);
+    if (t) out[l] = t; else failed = true;
+  }
+  const { error } = await supabase.from('categories').insert({ name_ar: out.ar, name_fr: out.fr, name_en: out.en, sort_order: 100 + categories.length });
+  btn.disabled = false;
+  if (error) return catMsg(L3('تعذرت الإضافة.', 'Échec de l’ajout.', 'Could not add.'), 'error');
+  $('#cats-name').value = '';
+  catMsg(failed ? L3('أُضيف، لكن تعذرت ترجمة بعض اللغات؛ عدّل الأسماء يدويًا.', 'Ajouté, mais certaines traductions ont échoué ; modifiez-les à la main.', 'Added, but some translations failed; edit them by hand.') : L3('تمت الإضافة وترجمتها تلقائيًا.', 'Ajouté et traduit automatiquement.', 'Added and auto-translated.'), failed ? 'error' : 'success');
+  await loadCategories(); renderCatManager();
+});
 
 // ---------- Print shop codes (customers without a printer) ----------
 const SHOP_ERRORS = {
@@ -2507,7 +2643,7 @@ function showShopDialog(code, expiresAt, maxPrints) {
   $('#shop-code-text').textContent = formatShopCode(code);
   $('#shop-link').value = link;
   $('#shop-qr-wrap')?.classList.toggle('is-hidden', !drawQr($('#shop-qr'), link));
-  $('#shop-expiry').textContent = `${maxPrints ? `يسمح بطباعة ${maxPrints} نسخة فقط • ` : ''}صالح حتى ${new Date(expiresAt).toLocaleString('ar-DZ', { dateStyle: 'medium', timeStyle: 'short' })}`;
+  $('#shop-expiry').textContent = `${maxPrints ? `يسمح بطباعة ${maxPrints} نسخة فقط • ` : ''}صالح حتى ${new Date(expiresAt).toLocaleString((window.__locale || 'ar-DZ'), { dateStyle: 'medium', timeStyle: 'short' })}`;
   if ($('#shop-feedback')) { $('#shop-feedback').textContent = ''; $('#shop-feedback').className = 'auth-feedback'; }
   $('#shop-dialog')?.showModal();
 }
@@ -2773,12 +2909,7 @@ $('#theme-toggle')?.addEventListener('click', () => {
 });
 applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
 
-$('#catalog-search')?.addEventListener('input', (event) => {
-  const q = event.target.value.trim().toLowerCase();
-  document.querySelectorAll('.document-catalog .catalog-card').forEach((card) => {
-    card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
-  });
-});
+$('#catalog-search')?.addEventListener('input', applyCatalogFilter);
 
 // ---------- Plans dialog ----------
 async function openPlans() {
