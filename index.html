@@ -21,7 +21,7 @@
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=46" />
+  <link rel="stylesheet" href="styles.css?v=47" />
 </head>
 <body class="landing-on">
   <section class="landing" id="landing" aria-label="مرحبًا بك في مداد">
@@ -70,7 +70,6 @@
       <a href="#plans" id="plans-nav">الباقات</a>
     </nav>
     <div class="header-actions">
-      <span data-lang-slot></span>
       <span class="sub-badge is-hidden" id="sub-badge" title="رصيد اشتراكك"></span>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="الوضع الداكن"><i data-lucide="moon"></i></button>
       <!-- زر الدخول - يظهر عند عدم تسجيل الدخول -->
@@ -90,6 +89,7 @@
         </button>
         <!-- القائمة المنسدلة -->
         <div class="profile-dropdown" id="profile-dropdown" inert>
+          <div class="profile-lang"><span data-lang-slot></span></div>
           <div class="profile-dropdown-header">
             <div class="profile-dropdown-avatar" id="profile-dropdown-avatar">م</div>
             <div>
@@ -352,7 +352,7 @@
   <dialog class="purchase-dialog" id="shop-copies-dialog"><button class="dialog-close" id="shop-copies-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">للطباعة في مطبعة</div><h2>كم نسخة تريد طباعتها؟</h2><p class="dialog-subtitle">حدّد العدد بدقة: لن يستطيع صاحب المطبعة طباعة أكثر منه، فلا تُسرق منك نسخ زائدة.</p><div class="quantity-control"><button type="button" id="shop-copies-minus" aria-label="تقليل العدد"><i data-lucide="minus"></i></button><strong id="shop-copies-value">1</strong><button type="button" id="shop-copies-plus" aria-label="زيادة العدد"><i data-lucide="plus"></i></button></div><p class="purchase-feedback" id="shop-copies-hint"></p><button class="primary-button full-button" id="shop-copies-confirm" type="button"><span>إنشاء رمز المطبعة</span><i data-lucide="arrow-left"></i></button></dialog>
   <dialog class="preview-dialog" id="preview-dialog"><button class="dialog-close" id="preview-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><h2 id="preview-title"></h2><div class="preview-stage"><img id="preview-image" alt="معاينة الوثيقة" /></div><button class="primary-button full-button" id="preview-buy" type="button"><span>شراء الوثيقة</span><i data-lucide="arrow-left"></i></button></dialog>
   <dialog class="account-dialog" id="account-dialog"><button class="dialog-close" id="account-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button><div class="section-kicker">الملف الشخصي</div><div class="profile-header"><div class="profile-avatar" id="profile-avatar">م</div><div><h2 id="profile-name">حسابي</h2><p class="profile-email" id="profile-email">-</p></div></div><div class="profile-details"><div><span>طريقة الدخول</span><strong id="profile-provider">-</strong></div><div><span>نوع الحساب</span><strong id="profile-role">مشتري</strong></div></div><div class="account-section-title"><h3>طلباتي</h3><p class="dialog-subtitle" id="account-summary">جارٍ تحميل البيانات...</p></div><div class="account-orders" id="account-orders"></div><div class="account-section-title"><h3>مستنداتي (تراخيص الطباعة)</h3></div><div class="account-orders" id="account-licenses"></div></dialog>
-  <footer><div class="brand mini"><span class="brand-mark logo" role="img" aria-label="شعار مِداد"></span><strong>مِداد</strong></div><span>© 2026 منصة مِداد للوثائق الآمنة</span><span class="footer-secure"><i data-lucide="shield"></i> خصوصيتك أولاً</span></footer>
+  <footer><span data-lang-slot></span><div class="brand mini"><span class="brand-mark logo" role="img" aria-label="شعار مِداد"></span><strong>مِداد</strong></div><span>© 2026 منصة مِداد للوثائق الآمنة</span><span class="footer-secure"><i data-lucide="shield"></i> خصوصيتك أولاً</span></footer>
 
   <dialog class="privacy-dialog" id="privacy-dialog">
     <button class="dialog-close" id="privacy-dialog-close" type="button" aria-label="إغلاق"><i data-lucide="x"></i></button>
@@ -388,7 +388,7 @@
 document.addEventListener('click',q,true);document.addEventListener('submit',q,true);})();
 </script>
 <script src="i18n.js?v=1"></script>
-  <script type="module" src="app.js?v=45"></script>
+  <script type="module" src="app.js?v=46"></script>
 <div class="edit-dock is-hidden" id="edit-dock">
   <div class="dock-panel is-hidden" id="dock-panel"><div class="dock-tabs" id="dock-tabs"></div><div class="dock-body" id="dock-body"></div></div>
   <div class="dock-main">

@@ -623,6 +623,8 @@ html[dir=ltr] dialog .dialog-close,html[dir=ltr] dialog [class*="close"]{left:au
 .cat-row .admin-mini{justify-self:start}
 @media(min-width:700px){.cat-row{grid-template-columns:1fr 1fr 1fr auto auto;align-items:center}}
 .admin-mini.danger{color:#b91c1c}
+.profile-lang{padding:6px 10px 8px;border-bottom:1px solid #ece6dc;margin-bottom:6px}
+footer .lang-sw{margin-inline-end:8px}
 
 /* ---------- Dark mode (generated color overrides) ---------- */
 html[data-theme="dark"]{color-scheme:dark}
@@ -899,6 +901,7 @@ html[data-theme="dark"] .cat-chip{background:#2a1e0a;color:#ccd2b2}
 html[data-theme="dark"] .cats-form input,html[data-theme="dark"] .cats-form select,html[data-theme="dark"] .cat-select,html[data-theme="dark"] .cat-row input{border:1px solid #46433d;background:#141414}
 html[data-theme="dark"] .cat-row{border-top:1px solid #433c2f}
 html[data-theme="dark"] .admin-mini.danger{color:#ea7676}
+html[data-theme="dark"] .profile-lang{border-bottom:1px solid #433c2f}
 
 html[data-theme="dark"] .brand-mark.logo{background:#e3d8b4}
 html[data-theme="dark"] .lang-sw button.on{background:#e3d8b4;color:#222}
