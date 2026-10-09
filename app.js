@@ -429,6 +429,22 @@ async function loadAccountHistory() {
       });
       top.append(title, remaining);
       article.append(top, open);
+      if (license.remaining_prints > 0) {
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'card-extra-btn danger-btn';
+        cancel.textContent = 'إلغاء الترخيص';
+        cancel.addEventListener('click', async () => {
+          if (!(await askConfirm('إلغاء هذا الترخيص؟ ستُصفَّر نسخه المتبقية ولا يمكن استرجاعها، ولن يعمل أي رمز مطبعة مرتبط به.', 'إلغاء الترخيص', 'تأكيد'))) return;
+          cancel.disabled = true;
+          const { data, error } = await supabase.rpc('cancel_license', { p_license_id: license.id });
+          if (error || data?.status !== 'ok') { cancel.disabled = false; return setNotice('تعذر إلغاء الترخيص الآن.', 'error'); }
+          if (activeLicense?.license_key === license.license_key) { try { activeLicense = null; } catch (_) {} }
+          setNotice('تم إلغاء الترخيص.', 'success');
+          loadAccountHistory();
+        });
+        article.append(cancel);
+      }
       return article;
     }));
   } catch (_) {
@@ -2705,6 +2721,15 @@ async function openShopCode(raw) {
 
 $('#shop-open')?.addEventListener('click', createShopCode);
 $('#shop-close')?.addEventListener('click', () => $('#shop-dialog')?.close());
+$('#shop-cancel')?.addEventListener('click', async () => {
+  const code = ($('#shop-code-text')?.textContent || '').replace(/-/g, '');
+  if (!code) return;
+  if (!(await askConfirm('إلغاء هذا الرمز؟ لن يعمل مع المطبعة بعد الآن.', 'إلغاء الرمز', 'تأكيد'))) return;
+  const { data, error } = await supabase.rpc('cancel_shop_code', { p_code: code });
+  if (error || data?.status !== 'ok') return setNotice('تعذر إلغاء الرمز الآن.', 'error');
+  $('#shop-dialog')?.close();
+  setNotice('تم إلغاء الرمز.', 'success');
+});
 $('#shop-copy-code')?.addEventListener('click', () => copyText($('#shop-code-text').textContent.replace(/-/g, ''), 'تم نسخ الرمز.'));
 $('#shop-copy-link')?.addEventListener('click', () => copyText($('#shop-link').value, 'تم نسخ الرابط.'));
 $('#shop-entry-form')?.addEventListener('submit', (event) => {
@@ -2934,6 +2959,7 @@ function hideLanding() { document.body.classList.remove('landing-on'); }
   supabase?.auth.getSession().then(({ data }) => { if (data?.session) hideLanding(); }).catch(() => {});
   supabase?.auth.onAuthStateChange((_e, session) => { if (session) { hideLanding(); window.scrollTo(0, 0); } else if (_e === 'SIGNED_OUT') document.body.classList.add('landing-on'); });
   window.setTimeout(() => { if (!supabase) hideLanding(); }, 0);
+  document.querySelectorAll('.prices .pc').forEach((pc) => { pc.tabIndex = 0; pc.setAttribute('role', 'button'); const pick = () => { document.querySelectorAll('.prices .pc').forEach((x) => x.classList.remove('best')); pc.classList.add('best'); }; pc.addEventListener('click', pick); pc.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } }); });
   window.__medadReady = true;
   if (window.__startQueued) { window.__startQueued = false; document.querySelectorAll('.js-start,#landing-form button').forEach((b) => b.classList.remove('is-wait')); openAuthDialog('login'); }
 }
