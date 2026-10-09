@@ -2606,4 +2606,533 @@ $('#forgot-password')?.addEventListener('click', async () => {
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname, captchaToken: captchaToken || undefined });
     resetCaptcha();
-    setAuthFeedback(error ? 'تعذر إرسال رابط الاستعادة. تحقق من البريد وحاول مرة
+    setAuthFeedback(error ? 'تعذر إرسال رابط الاستعادة. تحقق من البريد وحاول مرة أخرى.' : 'تم إرسال رابط استرجاع كلمة المرور إلى بريدك.', error ? 'error' : 'success');
+  } catch (_) {
+    setAuthFeedback('تعذر الاتصال بخدمة الحسابات. حاول مرة أخرى.', 'error');
+  }
+});
+$('#auth-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!supabase) {
+    setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
+    return;
+  }
+  if (authMode !== 'reset' && !requireConsent()) return;
+  if (authMode !== 'reset' && TURNSTILE_SITE_KEY && !captchaToken) {
+    setAuthFeedback('أكمل التحقق البشري أولًا.', 'error');
+    return;
+  }
+  const email = $('#auth-email')?.value.trim();
+  const password = $('#auth-password')?.value;
+  const submit = $('#auth-submit');
+  if (submit) submit.disabled = true;
+  setAuthFeedback('جارٍ التحقق...');
+  try {
+    const result = authMode === 'reset'
+      ? await supabase.auth.updateUser({ password })
+      : authMode === 'signup'
+        ? await supabase.auth.signUp({ email, password, options: { data: { accepted_terms: 'v2', accepted_terms_at: new Date().toISOString() }, captchaToken: captchaToken || undefined } })
+        : await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: captchaToken || undefined } });
+    if (result.error) throw result.error;
+    if (authMode !== 'reset') saveConsent();
+    if (authMode === 'reset') {
+      setAuthFeedback('تم تحديث كلمة المرور بنجاح.', 'success');
+      $('#auth-dialog')?.close();
+      return;
+    }
+    if (authMode === 'signup' && !result.data.session) {
+      setAuthFeedback('تم إنشاء الحساب. تحقق من بريدك الإلكتروني ثم سجّل الدخول.', 'success');
+      openAuthDialog('login');
+      return;
+    }
+    continuePendingPurchase();
+  } catch (error) {
+    setAuthFeedback(authErrorMessage(error), 'error');
+  } finally {
+    if (submit) submit.disabled = false;
+    if (authMode !== 'reset') resetCaptcha();
+  }
+});
+
+async function startOAuth(provider) {
+  if (!supabase) {
+    setAuthFeedback('تعذر الاتصال بخدمة الحسابات.', 'error');
+    return;
+  }
+  if (!requireConsent()) return;
+  saveConsent();
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin + window.location.pathname }
+    });
+    if (error) setAuthFeedback('تعذر بدء تسجيل الدخول عبر هذا المزود. حاول مرة أخرى.', 'error');
+  } catch (_) {
+    setAuthFeedback('تعذر الاتصال بمزود تسجيل الدخول. حاول مرة أخرى.', 'error');
+  }
+}
+
+$('#google-auth')?.addEventListener('click', () => startOAuth('google'));
+$('#github-auth')?.addEventListener('click', () => startOAuth('github'));
+$('#account-logout')?.addEventListener('click', async () => {
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) setNotice('تعذر تسجيل الخروج الآن. حاول مرة أخرى.', 'error');
+  else {
+    renderAccount(null);
+    activeLicense = null;
+    pdfRenderToken += 1;
+    $('#security')?.classList.add('is-hidden');
+    const body = $('#document-content');
+    if (body) { body.replaceChildren(); body.classList.remove('is-pdf'); body.dataset.pdfReady = '0'; }
+    if ($('#license-key')) $('#license-key').value = '';
+    if ($('#print-button')) $('#print-button').disabled = true;
+    setNotice('تم تسجيل الخروج.', 'success');
+  }
+});
+async function openAccountDialog(scrollToLicenses) {
+  if (!supabase) return;
+  closeProfileDropdown();
+  $('#account-dialog')?.showModal();
+  try {
+    await loadAccountHistory();
+  } catch (_) {
+    if ($('#account-orders')) $('#account-orders').textContent = 'تعذر تحميل الطلبات. تحقق من اتصالك ثم أعد المحاولة.';
+  }
+  if (scrollToLicenses) $('#account-licenses')?.scrollIntoView({ block: 'start' });
+}
+$('#account-open')?.addEventListener('click', () => openAccountDialog(false));
+$('#docs-open')?.addEventListener('click', () => openAccountDialog(true));
+$('#account-close')?.addEventListener('click', () => $('#account-dialog')?.close());
+$('#login-trigger')?.addEventListener('click', () => openAuthDialog('login'));
+$('#profile-trigger')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  if ($('#profile-dropdown')?.classList.contains('is-open')) closeProfileDropdown();
+  else openProfileDropdown();
+});
+document.addEventListener('click', (event) => {
+  if (!$('#user-profile')?.contains(event.target)) closeProfileDropdown();
+});
+document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {
+  if (event.target === dialog) dialog.close();
+}));
+
+loadCatalogFromSupabase();
+loadPlans();
+restorePendingPurchase();
+supabase?.auth.getSession().then(({ data: { session }, error }) => {
+  if (error) {
+    renderAccount(null);
+    setNotice('تعذر استعادة جلسة الدخول. سجّل الدخول للمتابعة.', 'error');
+    return;
+  }
+  renderAccount(session?.user ?? null);
+  if (session && pendingPurchase) continuePendingPurchase();
+  else if (pendingReturnStatus) {
+    if (session) confirmCheckoutReturn(pendingReturnStatus);
+    else openAuthDialog('login');
+  }
+}).catch(() => setNotice('تعذر الاتصال بخدمة الحسابات. حاول تحديث الصفحة.', 'error'));
+
+supabase?.auth.onAuthStateChange((event, session) => {
+  renderAccount(session?.user ?? null);
+  if (event === 'PASSWORD_RECOVERY') openAuthDialog('reset');
+  if (event === 'SIGNED_IN') {
+    if (pendingPurchase) continuePendingPurchase();
+    else if (pendingReturnStatus) confirmCheckoutReturn(pendingReturnStatus);
+  }
+});
+
+$('#privacy-policy-link')?.addEventListener('click', () => $('#privacy-dialog')?.showModal());
+$('#privacy-dialog-close')?.addEventListener('click', () => $('#privacy-dialog')?.close());
+document.addEventListener('click', (event) => {
+  if (event.target === $('#privacy-dialog')) $('#privacy-dialog')?.close();
+});
+
+window.lucide?.createIcons();
+
+
+// Opened from a print shop QR code: ?shop=XXXX...
+{
+  const shopParam = new URLSearchParams(window.location.search).get('shop');
+  if (shopParam) openShopCode(shopParam);
+}
+
+// ---------- Dark mode ----------
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const icon = $('#theme-toggle i, #theme-toggle svg');
+  if (icon) { const n = document.createElement('i'); n.dataset.lucide = theme === 'dark' ? 'sun' : 'moon'; icon.replaceWith(n); window.lucide?.createIcons(); }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = theme === 'dark' ? '#15170f' : '#fbf8f1';
+}
+$('#theme-toggle')?.addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('medad-theme', next); } catch (_) {}
+  applyTheme(next);
+});
+applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+
+$('#catalog-search')?.addEventListener('input', (event) => {
+  const q = event.target.value.trim().toLowerCase();
+  document.querySelectorAll('.document-catalog .catalog-card').forEach((card) => {
+    card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+// ---------- Plans dialog ----------
+async function openPlans() {
+  closeProfileDropdown?.();
+  $('#plans-dialog')?.showModal();
+  if (!plans.length) loadPlans();
+  try { const { data: { user } } = await supabase.auth.getUser(); refreshSubscription(user); } catch (_) {}
+}
+$('#plans-open')?.addEventListener('click', openPlans);
+$('#plans-nav')?.addEventListener('click', (e) => { e.preventDefault(); openPlans(); });
+$('#sub-badge')?.addEventListener('click', openPlans);
+$('#plans-close')?.addEventListener('click', () => $('#plans-dialog')?.close());
+
+
+// ---------- Landing page ----------
+function hideLanding() { document.body.classList.remove('landing-on'); }
+{
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('shop') || p.get('status') || p.get('checkout') || p.get('order')) hideLanding();
+  document.querySelectorAll('.js-start').forEach((b) => b.addEventListener('click', () => openAuthDialog('login')));
+  $('#landing-form')?.addEventListener('submit', (e) => { e.preventDefault(); const q = $('#landing-q').value.trim(); if (q) { const s = $('#catalog-search'); if (s) { s.value = q; s.dispatchEvent(new Event('input')); } } openAuthDialog('login'); });
+  supabase?.auth.getSession().then(({ data }) => { if (data?.session) hideLanding(); }).catch(() => {});
+  supabase?.auth.onAuthStateChange((_e, session) => { if (session) { hideLanding(); window.scrollTo(0, 0); } else if (_e === 'SIGNED_OUT') document.body.classList.add('landing-on'); });
+  window.setTimeout(() => { if (!supabase) hideLanding(); }, 0);
+  window.__medadReady = true;
+  if (window.__startQueued) { window.__startQueued = false; document.querySelectorAll('.js-start,#landing-form button').forEach((b) => b.classList.remove('is-wait')); openAuthDialog('login'); }
+}
+
+// ---------- Subscription expiry reminder ----------
+function checkExpiryReminder() {
+  try {
+    if (!currentUser || !subSummary?.has_subscription || !subSummary.expires_at) return;
+    const left = new Date(subSummary.expires_at).getTime() - Date.now();
+    if (left <= 0 || left > 3 * 86400000) return;
+    const key = 'medad-expiry-' + new Date().toDateString();
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    const days = Math.max(1, Math.ceil(left / 86400000));
+    showToast(`اشتراكك ينتهي خلال ${days === 1 ? 'يوم واحد' : days + ' أيام'}. جدّده من «الباقات» حتى لا ينقطع رصيدك.`, 'info');
+  } catch (_) {}
+}
+
+// ---------- Local autosave of edits ----------
+function draftKey() { return activeLicense && !activeLicense.isShop && activeLicense.document_id ? 'medad-draft:' + activeLicense.document_id : null; }
+function readDraft() { try { const k = draftKey(); return k ? JSON.parse(localStorage.getItem(k) || 'null') : null; } catch (_) { return null; } }
+function writeDraft(obj) { try { const k = draftKey(); if (k) localStorage.setItem(k, JSON.stringify({ ...obj, t: Date.now() })); } catch (_) {} }
+function clearDraft() { try { const k = draftKey(); if (k) localStorage.removeItem(k); } catch (_) {} }
+function saveDraftPdf(snap) {
+  if (!activeLicense?.document?.storage_path) return;
+  const empty = !JSON.parse(snap).some((l) => l.length);
+  if (empty) clearDraft(); else writeDraft({ annots: snap });
+}
+function restoreDraftPdf() {
+  const d = readDraft();
+  if (!d?.annots) return;
+  try {
+    const data = JSON.parse(d.annots);
+    document.querySelectorAll('.annot-layer').forEach((layer, i) => (data[i] || []).forEach((x) => buildAnnot(layer, x)));
+    showToast('استعدنا تعديلاتك السابقة على هذه الوثيقة.', 'success');
+  } catch (_) {}
+}
+function restoreDraftHtml(license, contentEl) {
+  const prev = activeLicense; activeLicense = license;
+  const d = readDraft(); activeLicense = prev;
+  if (d?.html) { contentEl.replaceChildren(sanitizeDocumentHtml(d.html)); showToast('استعدنا تعديلاتك السابقة على هذه الوثيقة.', 'success'); }
+}
+{
+  let t = null;
+  $('#document-content')?.addEventListener('input', () => {
+    if (activeLicense?.document?.storage_path) return;
+    window.clearTimeout(t);
+    t = window.setTimeout(() => writeDraft({ html: $('#document-content').innerHTML }), 800);
+  });
+}
+
+// ---------- Promo codes: user redeem ----------
+const PROMO_ERRORS = { invalid_code: 'الرمز غير صحيح أو منتهي.', already_used: 'استعملت هذا الرمز من قبل.', auth: 'سجّل الدخول أولًا.' };
+function rpcMsg(error, map) { const m = String(error?.message || ''); return Object.entries(map).find(([k]) => m.includes(k))?.[1] || 'تعذر تنفيذ الطلب. حاول مرة أخرى.'; }
+$('#promo-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#promo-input');
+  const code = input.value.trim();
+  if (!code) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { openAuthDialog('login'); return; }
+  const { data, error } = await supabase.rpc('redeem_promo_code', { p_code: code });
+  if (error) { showToast(rpcMsg(error, PROMO_ERRORS), 'error'); return; }
+  input.value = '';
+  showToast(`🎁 حصلت على ${data.sheets} ورقة مجانية، صالحة ${data.days} يومًا.`, 'success');
+  refreshSubscription(user);
+});
+
+// ---------- Promo codes: admin ----------
+const PROMO_ADMIN_ERRORS = { exists: 'هذا الرمز موجود مسبقًا.', bad_code: 'الرمز: حروف إنجليزية وأرقام و - _ فقط (3 إلى 32).', forbidden: 'ليست لديك صلاحية.' };
+async function loadPromos() {
+  const list = $('#promo-list');
+  const { data, error } = await supabase.rpc('admin_list_promos');
+  if (error || !Array.isArray(data)) { list.textContent = 'تعذر تحميل الرموز.'; return; }
+  list.replaceChildren();
+  if (!data.length) list.textContent = 'لا توجد رموز بعد.';
+  data.forEach((p) => {
+    const row = document.createElement('div');
+    row.className = 'admin-doc-row';
+    const info = document.createElement('div');
+    info.className = 'admin-doc-info';
+    const b = document.createElement('strong'); b.dir = 'ltr'; b.textContent = p.code;
+    const s = document.createElement('small'); s.textContent = `${p.sheets} ورقة • استُعمل ${p.uses}${p.max_uses ? ' / ' + p.max_uses : ''} • ${p.active ? 'فعّال' : 'موقوف'}`;
+    info.append(b, s);
+    const act = document.createElement('div'); act.className = 'admin-doc-actions';
+    const cp = document.createElement('button'); cp.type = 'button'; cp.className = 'admin-mini'; cp.textContent = 'نسخ الرسالة';
+    cp.addEventListener('click', () => { const t = `ضع الرمز ${p.code} في موقع مداد لتحصل على ${p.sheets} ورقة مجانًا 🎁`; navigator.clipboard?.writeText(t).then(() => showToast('تم نسخ الرسالة.', 'success')).catch(() => {}); $('#promo-msg').textContent = t; });
+    const tg = document.createElement('button'); tg.type = 'button'; tg.className = 'admin-mini'; tg.textContent = p.active ? 'إيقاف' : 'تفعيل';
+    tg.addEventListener('click', async () => { await supabase.rpc('admin_toggle_promo', { p_code: p.code, p_active: !p.active }); loadPromos(); });
+    act.append(cp, tg); row.append(info, act); list.append(row);
+  });
+}
+$('#promos-open')?.addEventListener('click', () => { if (!isAdmin) return; closeProfileDropdown(); $('#promo-dialog')?.showModal(); loadPromos(); });
+$('#promo-close')?.addEventListener('click', () => $('#promo-dialog')?.close());
+$('#promo-create')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { data, error } = await supabase.rpc('admin_create_promo', {
+    p_code: $('#promo-code').value, p_sheets: Number($('#promo-sheets').value), p_max_uses: Number($('#promo-max').value) || 0,
+    p_valid_days: Number($('#promo-days').value) || 30, p_expires: null, p_note: $('#promo-note').value || null });
+  if (error) { showToast(rpcMsg(error, PROMO_ADMIN_ERRORS), 'error'); return; }
+  $('#promo-msg').textContent = `ضع الرمز ${data.code} في موقع مداد لتحصل على ${$('#promo-sheets').value} ورقة مجانًا 🎁`;
+  $('#promo-code').value = '';
+  showToast('تم إنشاء الرمز.', 'success');
+  loadPromos();
+});
+
+{
+  const els = document.querySelectorAll('.landing .rv');
+  if ('IntersectionObserver' in window) {
+    document.querySelector('.landing')?.classList.add('rv-on');
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+    els.forEach((e) => io.observe(e));
+  }
+}
+
+function renderLandingGallery(docs) {
+  const track = $('#landing-track');
+  if (!track || !docs?.length) return;
+  const make = (doc) => {
+    const d = document.createElement('div');
+    d.className = 'md';
+    const url = doc.preview_path ? supabase.storage.from('previews').getPublicUrl(doc.preview_path).data.publicUrl : '';
+    if (url) {
+      d.classList.add('has-img');
+      const img = document.createElement('img'); img.crossOrigin = 'anonymous'; img.addEventListener('load', () => smoothDownscale(img, 170), { once: true }); img.src = url; img.alt = ''; img.loading = 'lazy';
+      d.append(img);
+    }
+    const b = document.createElement('b'); b.textContent = doc.title; d.append(b);
+    if (!url) for (let i = 0; i < 5; i += 1) d.append(document.createElement('i'));
+    return d;
+  };
+  let list = [...docs];
+  while (list.length < 8) list = list.concat(docs);
+  const set = list.map(make);
+  track.replaceChildren(...set, ...list.map(make));
+}
+
+// Shrinks big previews in halving steps so fine grids/lines don't turn into moiré ("overlapping" lines).
+function smoothDownscale(img, fallbackCss = 300) {
+  try {
+    if (img.dataset.sm) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const w = Math.round((img.clientWidth || fallbackCss) * dpr);
+    if (!w || img.naturalWidth <= w * 1.3) return;
+    img.dataset.sm = '1';
+    let cur = document.createElement('canvas');
+    cur.width = img.naturalWidth; cur.height = img.naturalHeight;
+    cur.getContext('2d').drawImage(img, 0, 0);
+    const step = (to) => {
+      const c = document.createElement('canvas');
+      c.width = to; c.height = Math.round(cur.height * to / cur.width);
+      const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+      x.drawImage(cur, 0, 0, c.width, c.height);
+      cur = c;
+    };
+    while (cur.width / 2 > w) step(Math.round(cur.width / 2));
+    step(w);
+    img.src = cur.toDataURL('image/jpeg', 0.92);
+  } catch (_) { /* tainted canvas or no support: keep the original */ }
+}
+
+
+// ---------- Manual payment (CCP / BaridiMob) ----------
+const MANUAL_ERRORS = {
+  duplicate_receipt: 'هذا الإيصال استُعمل من قبل في طلب آخر.',
+  duplicate_operation: 'رقم العملية هذا مسجّل في طلب آخر.',
+  receipt_older_than_order: 'تاريخ الإيصال أقدم من الطلب. حوّل المبلغ بعد إنشاء الطلب.',
+  bad_receipt_time: 'تاريخ التحويل غير صحيح.',
+  operation_required: 'اكتب رقم العملية كما في الإيصال.',
+  sender_required: 'اكتب اسمك كما في التحويل.',
+  receipt_required: 'أرفق صورة الإيصال.',
+  order_not_pending: 'هذا الطلب لم يعد بانتظار الدفع.',
+  order_not_found: 'الطلب غير موجود.',
+  plan_not_found: 'هذه الباقة لم تعد متاحة.',
+  document_not_found: 'هذه الوثيقة لم تعد متاحة للشراء.',
+  not_authenticated: 'سجّل الدخول أولًا.',
+  reason_required: 'اكتب سبب الرفض.',
+  forbidden: 'ليست لديك صلاحية.'
+};
+let manualOrder = null;
+let manualOpening = false;
+function mpMsg(text, type = 'error') {
+  const fb = $('#mp-feedback');
+  if (!fb) return;
+  fb.textContent = text || '';
+  fb.hidden = !text;
+  fb.className = 'mp-alert ' + type;
+  if (text && type === 'error') fb.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+async function startManualCheckout(documentId, copiesCount, planCode) {
+  if (!supabase) throw new CheckoutError('خدمة الدفع غير متاحة الآن.');
+  const { data, error } = await supabase.rpc('create_manual_order', { p_document_id: planCode ? null : documentId, p_copies: planCode ? null : copiesCount, p_plan: planCode || null });
+  if (error) throw new CheckoutError(rpcMsg(error, MANUAL_ERRORS));
+  $('#purchase-dialog')?.close();
+  $('#plans-dialog')?.close();
+  setNotice('', 'info');
+  await openManualDialog(data);
+}
+
+async function openManualDialog(order) {
+  if (manualOpening) return;
+  manualOpening = true;
+  try { await openManualDialogInner(order); } finally { manualOpening = false; }
+}
+
+async function openManualDialogInner(order) {
+  manualOrder = order;
+  const box = document.createDocumentFragment();
+  const { data: s } = await supabase.rpc('get_manual_payment_settings');
+  const rows = [['المبلغ', `${Number(order.amount)} دج`], ['رمز الطلب', order.manual_reference], ['اسم صاحب الحساب', s?.account_name], ['CCP', s?.ccp], ['RIP (بريدي موب)', s?.rip]];
+  rows.forEach(([label, value]) => {
+    if (!value) return;
+    const row = document.createElement('div'); row.className = 'pay-row';
+    const l = document.createElement('span'); l.textContent = label;
+    const v = document.createElement('b'); v.dir = 'ltr'; v.textContent = value;
+    const c = document.createElement('button'); c.type = 'button'; c.className = 'admin-mini'; c.textContent = 'نسخ';
+    c.addEventListener('click', () => { navigator.clipboard?.writeText(String(value).replace(/\s*دج$/, '')).then(() => showToast('تم النسخ.', 'success')).catch(() => {}); });
+    row.append(l, v, c); box.append(row);
+  });
+  if (!s?.ccp && !s?.rip) { const w = document.createElement('p'); w.textContent = 'لم تُضبط بيانات الحساب بعد. تواصل مع الدعم.'; box.append(w); }
+  $('#mp-box').replaceChildren(box);
+  $('#mp-note').textContent = (s?.note ? s.note + ' ' : '') + 'اكتب رمز الطلب في ملاحظة التحويل إن أمكن. تُراجَع العملية يدويًا.';
+  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  $('#mp-time').value = now.toISOString().slice(0, 16);
+  $('#manual-form').reset?.();
+  $('#mp-time').value = now.toISOString().slice(0, 16);
+  mpMsg('');
+  $('#manual-dialog')?.showModal();
+}
+$('#manual-close')?.addEventListener('click', () => $('#manual-dialog')?.close());
+
+async function sha256Hex(file) {
+  const buf = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+$('#manual-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#mp-submit');
+  const file = $('#mp-file').files[0];
+  if (!manualOrder || !file) return;
+  if (file.size > 5 * 1024 * 1024) { mpMsg('حجم الملف أكبر من 5 ميغابايت.'); return; }
+  btn.disabled = true; mpMsg('جارٍ رفع الإيصال...', 'info');
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('not_authenticated');
+    const sha = await sha256Hex(file);
+    const ext = (file.type.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+    const path = `${user.id}/${manualOrder.order_id}-${Date.now()}.${ext}`;
+    const up = await supabase.storage.from('manual-receipts').upload(path, file, { contentType: file.type, upsert: false });
+    if (up.error) throw new Error('upload_failed');
+    const { error } = await supabase.rpc('submit_manual_payment', {
+      p_order_id: manualOrder.order_id, p_sender_name: $('#mp-sender').value, p_receipt_path: path, p_receipt_sha256: sha,
+      p_operation_no: $('#mp-op').value, p_receipt_time: new Date($('#mp-time').value).toISOString() });
+    if (error) { await supabase.storage.from('manual-receipts').remove([path]).catch(() => {}); throw error; }
+    supabase.functions.invoke('telegram-manual-payment', { body: { order_id: manualOrder.order_id } }).catch(() => {});
+    mpMsg('');
+    $('#manual-dialog')?.close();
+    showToast('وصلنا إيصالك. سيُفعَّل طلبك بعد المراجعة، وتجد حالته في «طلباتي».', 'success');
+    manualOrder = null;
+  } catch (err) {
+    mpMsg(err.message === 'upload_failed' ? 'تعذر رفع الملف. حاول مرة أخرى.' : rpcMsg(err, MANUAL_ERRORS));
+  } finally { btn.disabled = false; }
+});
+
+// ---------- Manual payment: admin review ----------
+async function loadPayments() {
+  const list = $('#payments-list');
+  list.textContent = 'جارٍ التحميل...';
+  const { data, error } = await supabase.rpc('admin_list_manual_payments_v2');
+  if (error || !Array.isArray(data)) { list.textContent = 'تعذر تحميل الطلبات.'; return; }
+  list.replaceChildren();
+  if (!data.length) list.textContent = 'لا توجد طلبات دفع.';
+  for (const p of data) {
+    const row = document.createElement('div'); row.className = 'admin-doc-row pay-item';
+    const info = document.createElement('div'); info.className = 'admin-doc-info';
+    const t = document.createElement('strong'); t.textContent = `${p.manual_reference} • ${Number(p.amount)} دج • ${p.plan ? 'اشتراك ' + p.plan : (p.document_title || 'وثيقة')}`;
+    const s1 = document.createElement('small'); s1.textContent = `${p.user_email} • المرسل: ${p.manual_sender_name || '—'}`;
+    const s2 = document.createElement('small'); s2.dir = 'ltr'; s2.textContent = `op: ${p.operation_no || '—'} • ${p.receipt_time ? new Date(p.receipt_time).toLocaleString('fr-DZ') : ''}`;
+    const s3 = document.createElement('small'); s3.textContent = p.status === 'paid' ? '✅ مقبول' : p.status === 'failed' ? `❌ مرفوض: ${p.rejection_reason || ''}` : (p.manual_receipt_path ? '⏳ بانتظار قرارك' : 'بلا إيصال بعد');
+    info.append(t, s1, s2, s3);
+    (p.flags || []).forEach((f) => { const w = document.createElement('small'); w.className = 'pay-flag'; w.textContent = '⚠ ' + f; info.append(w); });
+    const act = document.createElement('div'); act.className = 'admin-doc-actions';
+    if (p.manual_receipt_path) {
+      const view = document.createElement('button'); view.type = 'button'; view.className = 'admin-mini'; view.textContent = 'الإيصال';
+      view.addEventListener('click', async () => { const { data: u } = await supabase.storage.from('manual-receipts').createSignedUrl(p.manual_receipt_path, 300); if (u?.signedUrl) window.open(u.signedUrl, '_blank', 'noopener'); });
+      act.append(view);
+    }
+    if (p.status === 'pending' && p.manual_receipt_path) {
+      const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'admin-mini'; ok.textContent = 'قبول';
+      ok.addEventListener('click', async () => {
+        if (!(await askConfirm(`هل وجدت العملية ${p.operation_no} بمبلغ ${Number(p.amount)} دج في حسابك؟`, 'نعم، اقبل', 'تأكيد القبول'))) return;
+        const { error: e1 } = await supabase.rpc('admin_approve_manual_payment', { p_order_id: p.order_id });
+        showToast(e1 ? rpcMsg(e1, MANUAL_ERRORS) : 'تم القبول وتفعيل الطلب.', e1 ? 'error' : 'success'); loadPayments();
+      });
+      const no = document.createElement('button'); no.type = 'button'; no.className = 'admin-mini'; no.textContent = 'رفض';
+      no.addEventListener('click', async () => {
+        const reason = window.prompt('سبب الرفض (يظهر للزبون):'); if (!reason) return;
+        const { error: e2 } = await supabase.rpc('admin_reject_manual_payment', { p_order_id: p.order_id, p_reason: reason });
+        showToast(e2 ? rpcMsg(e2, MANUAL_ERRORS) : 'تم الرفض.', e2 ? 'error' : 'success'); loadPayments();
+      });
+      act.append(ok, no);
+    }
+    row.append(info, act); list.append(row);
+  }
+}
+async function loadPaySettings() {
+  const { data } = await supabase.from('payment_settings').select('account_name,ccp,rip,note,telegram_chat_id,telegram_enabled').eq('id', true).maybeSingle();
+  if (!data) return;
+  $('#ps-name').value = data.account_name || ''; $('#ps-ccp').value = data.ccp || ''; $('#ps-rip').value = data.rip || '';
+  $('#ps-note').value = data.note || ''; $('#ps-tg').value = data.telegram_chat_id || ''; $('#ps-tg-on').checked = Boolean(data.telegram_enabled);
+}
+$('#payments-open')?.addEventListener('click', () => { if (!isAdmin) return; closeProfileDropdown(); $('#payments-dialog')?.showModal(); loadPayments(); loadPaySettings(); });
+$('#payments-close')?.addEventListener('click', () => $('#payments-dialog')?.close());
+$('#pay-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { error } = await supabase.rpc('admin_update_manual_payment_settings', { p_account_name: $('#ps-name').value, p_ccp: $('#ps-ccp').value, p_rip: $('#ps-rip').value, p_note: $('#ps-note').value, p_telegram_chat_id: $('#ps-tg').value, p_telegram_enabled: $('#ps-tg-on').checked });
+  showToast(error ? rpcMsg(error, MANUAL_ERRORS) : 'تم حفظ بيانات الحساب.', error ? 'error' : 'success');
+});
+
+// Keep the sheet counters honest: other devices, print-shop prints and the midnight reset all change them off-screen.
+{
+  let lastSync = 0;
+  const sync = () => {
+    if (!currentUser || document.hidden || Date.now() - lastSync < 20000) return;
+    lastSync = Date.now();
+    refreshSubscription(currentUser);
+  };
+  document.addEventListener('visibilitychange', sync);
+  window.addEventListener('focus', sync);
+  window.setInterval(sync, 60000);
+}

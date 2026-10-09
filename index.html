@@ -21,7 +21,7 @@
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=40" />
+  <link rel="stylesheet" href="styles.css?v=41" />
 </head>
 <body class="landing-on">
   <section class="landing" id="landing" aria-label="مرحبًا بك في مداد">
@@ -377,7 +377,11 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
   <!-- ملف السكربت الخاص بالتطبيق -->
   <script src="qr.js"></script>
-  <script type="module" src="app.js?v=42"></script>
+  <script>
+(function(){function q(e){var t=e.target.closest&&e.target.closest('.js-start,#landing-form');if(!t||window.__medadReady)return;e.preventDefault();window.__startQueued=true;document.querySelectorAll('.js-start,#landing-form button').forEach(function(b){b.classList.add('is-wait')});}
+document.addEventListener('click',q,true);document.addEventListener('submit',q,true);})();
+</script>
+<script type="module" src="app.js?v=43"></script>
 <div class="edit-dock is-hidden" id="edit-dock">
   <div class="dock-panel is-hidden" id="dock-panel"><div class="dock-tabs" id="dock-tabs"></div><div class="dock-body" id="dock-body"></div></div>
   <div class="dock-main">

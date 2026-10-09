@@ -599,6 +599,8 @@ dialog::backdrop,.privacy-dialog::backdrop,.purchase-dialog::backdrop,.upload-de
 .mp-alert.error{background:#fdecea;border:1.5px solid #d9534f;color:#8a1f17}
 .mp-alert.info{background:#eef1e0;border:1px solid #c9ceab;color:#3d4426}
 
+.is-wait{opacity:.65;pointer-events:none}
+
 /* ---------- Dark mode (generated color overrides) ---------- */
 html[data-theme="dark"]{color-scheme:dark}
 html[data-theme="dark"]{--ink:#dbe0d1;--muted:#b4b4a6;--line:#433c2f;--paper:#141414;--warm:#221d11}
