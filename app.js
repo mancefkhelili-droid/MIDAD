@@ -3466,6 +3466,21 @@ $('#admin-wallet-open')?.addEventListener('click', async () => {
   await loadAdminWalletSettings(); await loadAdminWalletTopups(); await loadAdminWalletLedger();
 });
 $('#admin-wallet-close')?.addEventListener('click', () => $('#admin-wallet-dialog')?.close());
+function localizeWalletInstructions(raw) {
+  const source = String(raw || '');
+  if (!source || (window.MedadI18n?.lang || 'ar') === 'ar') return source;
+  // Translate common administrator-authored Arabic instructions for display without
+  // changing the original value stored in Supabase unless the admin edits it.
+  const phrases = [
+    [/بعد التحويل[،,]?\s*ارفع الإيصال واكتب اسم المرسل[.]?\s*تتم المراجعة يدويًا[.]?/g, 'بعد التحويل، ارفع الإيصال واكتب اسم المرسل. تتم المراجعة يدويًا.'],
+    [/بعد التحويل[،,]?\s*ارفع الإيصال/g, 'بعد التحويل، ارفع الإيصال'],
+    [/واكتب اسم المرسل/g, 'واكتب اسم المرسل'],
+    [/تتم المراجعة يدويًا/g, 'تتم المراجعة يدويًا']
+  ];
+  let translated = source;
+  for (const [pattern, phrase] of phrases) translated = translated.replace(pattern, phrase);
+  return t(translated);
+}
 async function loadAdminWalletSettings() {
   const { data, error } = await supabase.rpc('admin_wallet_get_settings');
   if (error || !data) { setAdminWalletFeedback(walletMsg(error || new Error('settings')), 'error'); return; }
@@ -3474,7 +3489,7 @@ async function loadAdminWalletSettings() {
   $('#aws-ccp-min').value = methods.find((m) => m.code === 'ccp')?.min ?? 500;
   $('#aws-bm-min').value = methods.find((m) => m.code === 'baridimob')?.min ?? 500;
   $('#aws-holder').value = data.account?.holder || ''; $('#aws-ccp').value = data.account?.ccp || '';
-  $('#aws-bm').value = data.account?.baridimob || ''; $('#aws-instructions').value = t(data.account?.instructions || '');
+  $('#aws-bm').value = data.account?.baridimob || ''; $('#aws-instructions').value = localizeWalletInstructions(data.account?.instructions || '');
   $('#aws-chat').value = data.telegram_chat_id || ''; $('#aws-telegram').checked = Boolean(data.telegram_enabled);
 }
 $('#admin-wallet-settings')?.addEventListener('submit', async (event) => {
