@@ -3310,7 +3310,7 @@ function setAdminWalletFeedback(message, type = '') {
   const el = $('#admin-wallet-feedback'); if (!el) return;
   el.textContent = message || ''; el.className = `auth-feedback ${type}`;
 }
-function walletMethodLabel(code) { return code === 'baridimob' ? 'بريدي موب' : code === 'ccp' ? 'CCP' : code; }
+function walletMethodLabel(code) { const key = code === 'baridimob' ? 'بريدي موب' : code === 'ccp' ? 'CCP' : code; return window.MedadI18n?.tr ? window.MedadI18n.tr(key) : key; }
 
 async function loadWalletSettings() {
   const { data, error } = await supabase.rpc('wallet_public_settings');
@@ -3320,7 +3320,7 @@ async function loadWalletSettings() {
   if (select) {
     select.replaceChildren();
     (data.methods || []).forEach((m) => {
-      const opt = document.createElement('option'); opt.value = m.code; opt.textContent = m.label || walletMethodLabel(m.code); opt.dataset.min = String(Number(m.min || data.min_topup || 500)); select.append(opt);
+      const opt = document.createElement('option'); opt.value = m.code; opt.textContent = (m.code === 'ccp' || m.code === 'baridimob') ? (window.MedadI18n?.tr?.(m.code === 'ccp' ? 'الدفع عبر CCP' : 'الدفع عبر بريدي موب') || walletMethodLabel(m.code)) : (m.label || walletMethodLabel(m.code)); opt.dataset.min = String(Number(m.min || data.min_topup || 500)); select.append(opt);
     });
     if (!select.options.length) throw new Error('bad_method');
     const updateMin = () => {

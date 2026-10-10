@@ -1,24 +1,13 @@
-مِداد - تحديث واجهة المحفظة
+Medad Wallet update (October 2026)
 
-الملفات:
-- index.html: أزرار المحفظة والنوافذ الجديدة.
-- app.js: الشحن، سجل الرصيد، شراء الوثائق والباقات من المحفظة، وإدارة طلبات الشحن.
-- styles.css: تنسيق المحفظة ودعم الهاتف والوضع الداكن.
+Included frontend files: index.html, app.js, styles.css, i18n.js.
 
-ما تم التحقق منه:
-- اجتاز app.js فحص الصياغة باستخدام node --check.
-- اجتاز index.html فحص محلل HTML.
-- قاعدة بيانات Supabase الحالية تحتوي بالفعل على wallets وwallet_topups وwallet_ledger وwallet_settings، ودوال RPC الخاصة بالمحفظة؛ لم تُنشأ جداول مكررة.
-- نُشرت Edge Function باسم telegram-wallet-topup، version 2، مع verify_jwt=true. تستخدم متغيرات البيئة الموجودة: TELEGRAM_BOT_TOKEN وSUPABASE_URL وSUPABASE_SERVICE_ROLE_KEY وSUPABASE_ANON_KEY أو SUPABASE_PUBLISHABLE_KEY.
+Changes in this update:
+- CCP and BaridiMob appear as first-class Medad wallet payment methods with translated labels.
+- Wallet and admin wallet interface strings now have French and English translations through Medad's existing i18n dictionary.
+- Admin-only wallet review is preserved; database RPC admin_wallet_approve was updated so an authenticated admin can approve their own pending top-up request as well as other users' requests. Non-admin users remain blocked by public.is_admin().
+- Cache versions were bumped in index.html.
 
-النشر:
-1. استبدل ملفات index.html وapp.js وstyles.css في مستودع الموقع بالملفات المرفقة.
-2. انشر المشروع على Vercel.
-3. بعد النشر، اختبر على حساب تجريبي: شحن 500 دج، مراجعة الطلب من لوحة الإدارة، ثم شراء وثيقة من المحفظة.
-4. تأكد أن Telegram Chat ID محفوظ في إعدادات إدارة المحفظة وأن إشعارات Telegram مفعّلة.
+Deploy all four frontend files to the same Vercel project. The database function change has already been applied to Supabase project epislkcmkneyqmonzias.
 
-ملاحظات مهمة:
-- لم أتمكن من نشر واجهة الموقع على Vercel مباشرة لأن أداة GitHub المتصلة لم تعرض مستودعًا متاحًا.
-- لم أُجرِ عملية مالية حقيقية على حساب إنتاجي للاختبار.
-- إشعار Telegram يعمل فقط إذا كانت أسرار الوظيفة موجودة وصحيحة، وإذا كانت إعدادات Telegram مفعّلة في payment_settings.
-- يجب أن تراجع الإيصال والتحويل فعليًا قبل قبول طلب الشحن.
+Important: the wallet approval operation only credits the submitted amount after an admin clicks Approve. Verify the actual transfer before approval. Telegram delivery and a complete live end-to-end purchase have not been tested in this update.
