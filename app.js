@@ -3325,7 +3325,8 @@ async function loadWalletSettings() {
     if (!select.options.length) throw new Error('bad_method');
     const updateMin = () => {
       const m = select.selectedOptions[0];
-      $('#wallet-amount').min = String(Number(m?.dataset.min || data.min_topup || 500));
+      $('#wallet-amount').min = String(Math.max(500, Number(m?.dataset.min || data.min_topup || 500)));
+      $('#wallet-amount').placeholder = t('الحد الأدنى للشحن 500 دج');
       if (Number($('#wallet-amount').value) < Number($('#wallet-amount').min)) $('#wallet-amount').value = $('#wallet-amount').min;
     };
     select.onchange = updateMin; updateMin();
@@ -3336,7 +3337,8 @@ async function loadWalletSettings() {
   if (account.ccp) lines.push(`CCP: ${account.ccp}`);
   if (account.baridimob) lines.push(`RIP / بريدي موب: ${account.baridimob}`);
   if (account.instructions) lines.push(account.instructions);
-  $('#wallet-payment-instructions').textContent = lines.join(' • ') || 'لم تُضبط معلومات الدفع بعد. تواصل مع الإدارة.';
+  const minimumNote = t('أدنى مبلغ يمكن إرساله عبر بوابة الدفع هو 500 دج.');
+  $('#wallet-payment-instructions').textContent = [lines.join(' • ') || t('لم تُضبط معلومات الحساب بعد. ستظهر بيانات التحويل بعد أن تضبطها الإدارة.'), minimumNote].filter(Boolean).join(' • ');
   return data;
 }
 
@@ -3497,8 +3499,8 @@ $('#admin-wallet-settings')?.addEventListener('submit', async (event) => {
   const min = Number($('#aws-min').value), max = Number($('#aws-max').value);
   if (min < 1 || max < min) return setAdminWalletFeedback('تحقق من الحد الأدنى والأعلى.', 'error');
   const methods = [
-    { code: 'ccp', label: 'CCP', min: Number($('#aws-ccp-min').value), enabled: Boolean($('#aws-ccp').value.trim()) },
-    { code: 'baridimob', label: 'بريدي موب', min: Number($('#aws-bm-min').value), enabled: Boolean($('#aws-bm').value.trim()) }
+    { code: 'ccp', label: 'CCP', min: Number($('#aws-ccp-min').value), enabled: true },
+    { code: 'baridimob', label: 'بريدي موب', min: Number($('#aws-bm-min').value), enabled: true }
   ];
   if (methods.some((m) => !Number.isInteger(m.min) || m.min < 1)) return setAdminWalletFeedback('الحد الأدنى لكل وسيلة يجب أن يكون عددًا صحيحًا موجبًا.', 'error');
   const account = { holder: $('#aws-holder').value, ccp: $('#aws-ccp').value, baridimob: $('#aws-bm').value, instructions: $('#aws-instructions').value };
