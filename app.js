@@ -3310,7 +3310,7 @@ function setAdminWalletFeedback(message, type = '') {
   const el = $('#admin-wallet-feedback'); if (!el) return;
   el.textContent = message || ''; el.className = `auth-feedback ${type}`;
 }
-function walletMethodLabel(code) { return code === 'baridimob' ? 'بريدي موب' : code === 'ccp' ? 'CCP' : code; }
+function walletMethodLabel(code) { const key = code === 'baridimob' ? 'بريدي موب' : code === 'ccp' ? 'CCP' : code; return window.MedadI18n?.tr ? window.MedadI18n.tr(key) : key; }
 
 async function loadWalletSettings() {
   const { data, error } = await supabase.rpc('wallet_public_settings');
@@ -3320,7 +3320,7 @@ async function loadWalletSettings() {
   if (select) {
     select.replaceChildren();
     (data.methods || []).forEach((m) => {
-      const opt = document.createElement('option'); opt.value = m.code; opt.textContent = m.label || walletMethodLabel(m.code); opt.dataset.min = String(Number(m.min || data.min_topup || 500)); select.append(opt);
+      const opt = document.createElement('option'); opt.value = m.code; opt.textContent = (m.code === 'ccp' || m.code === 'baridimob') ? (window.MedadI18n?.tr?.(m.code === 'ccp' ? 'الدفع عبر CCP' : 'الدفع عبر بريدي موب') || walletMethodLabel(m.code)) : (m.label || walletMethodLabel(m.code)); opt.dataset.min = String(Number(m.min || data.min_topup || 500)); select.append(opt);
     });
     if (!select.options.length) throw new Error('bad_method');
     const updateMin = () => {
@@ -3360,7 +3360,7 @@ async function loadWalletData() {
       const top = document.createElement('div'); top.className = 'order-item-top';
       const title = document.createElement('span'); title.textContent = x.description || ({topup:'شحن المحفظة',purchase:'شراء',refund:'استرداد',adjustment:'تسوية'}[x.kind] || 'عملية محفظة');
       const amount = document.createElement('strong'); amount.className = Number(x.amount) < 0 ? 'wallet-negative' : 'wallet-positive'; amount.textContent = `${Number(x.amount) > 0 ? '+' : ''}${walletMoney(x.amount)}`;
-      top.append(title, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • الرصيد بعد العملية: ${walletMoney(x.balance_after)}`; row.append(top, small); return row;
+      top.append(title, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • ${t('الرصيد بعد العملية:')} ${walletMoney(x.balance_after)}`; row.append(top, small); return row;
     }));
   }
   if (topups) {
@@ -3370,7 +3370,7 @@ async function loadWalletData() {
       const row = document.createElement('article'); row.className = 'order-item';
       const top = document.createElement('div'); top.className = 'order-item-top';
       const title = document.createElement('span'); title.textContent = `${walletMoney(x.amount)} • ${walletMethodLabel(x.method)}`;
-      const state = document.createElement('strong'); state.textContent = x.status === 'approved' ? 'مقبول' : x.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة';
+      const state = document.createElement('strong'); state.textContent = x.status === 'approved' ? t('مقبول') : x.status === 'rejected' ? t('مرفوض') : t('قيد المراجعة');
       top.append(title, state); const small = document.createElement('small'); small.textContent = `المرجع: ${x.transfer_ref} • ${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')}`; row.append(top, small);
       if (x.status === 'rejected' && x.reject_reason) { const reason = document.createElement('small'); reason.textContent = `سبب الرفض: ${x.reject_reason}`; row.append(reason); }
       return row;
@@ -3474,7 +3474,7 @@ async function loadAdminWalletSettings() {
   $('#aws-ccp-min').value = methods.find((m) => m.code === 'ccp')?.min ?? 500;
   $('#aws-bm-min').value = methods.find((m) => m.code === 'baridimob')?.min ?? 500;
   $('#aws-holder').value = data.account?.holder || ''; $('#aws-ccp').value = data.account?.ccp || '';
-  $('#aws-bm').value = data.account?.baridimob || ''; $('#aws-instructions').value = data.account?.instructions || '';
+  $('#aws-bm').value = data.account?.baridimob || ''; $('#aws-instructions').value = t(data.account?.instructions || '');
   $('#aws-chat').value = data.telegram_chat_id || ''; $('#aws-telegram').checked = Boolean(data.telegram_enabled);
 }
 $('#admin-wallet-settings')?.addEventListener('submit', async (event) => {
@@ -3493,40 +3493,41 @@ $('#admin-wallet-settings')?.addEventListener('submit', async (event) => {
   if (!error) { await loadAdminWalletSettings(); }
 });
 async function loadAdminWalletTopups() {
-  const box = $('#admin-wallet-topups'); if (!box) return; box.textContent = 'جارٍ التحميل...';
+  const box = $('#admin-wallet-topups'); if (!box) return; box.textContent = t('جارٍ التحميل...');
   const status = $('#aws-status')?.value || 'pending'; const search = $('#aws-search')?.value.trim() || '';
   const { data, error } = await supabase.rpc('admin_wallet_list_topups', { p_status: status === 'all' ? null : status, p_search: search || null, p_from: null, p_to: null, p_limit: 100 });
-  if (error || !Array.isArray(data)) { box.textContent = 'تعذر تحميل طلبات الشحن.'; setAdminWalletFeedback(walletMsg(error), 'error'); return; }
-  if (!data.length) { box.textContent = 'لا توجد طلبات بهذه التصفية.'; return; }
+  if (error || !Array.isArray(data)) { box.textContent = t('تعذر تحميل طلبات الشحن.'); setAdminWalletFeedback(walletMsg(error), 'error'); return; }
+  if (!data.length) { box.textContent = t('لا توجد طلبات بهذه التصفية.'); return; }
   box.replaceChildren(...data.map((x) => {
     const row = document.createElement('article'); row.className = 'admin-doc-row';
     const info = document.createElement('div'); info.className = 'admin-doc-info';
-    const title = document.createElement('strong'); title.textContent = `${walletMoney(x.amount)} • ${walletMethodLabel(x.method)} • ${x.status === 'approved' ? 'مقبول' : x.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}`;
-    const line = document.createElement('small'); line.textContent = `${x.email || x.user_id} • المرسل: ${x.sender_name} • المرجع: ${x.transfer_ref}`;
+    const title = document.createElement('strong'); title.textContent = `${walletMoney(x.amount)} • ${walletMethodLabel(x.method)} • ${x.status === 'approved' ? t('مقبول') : x.status === 'rejected' ? t('مرفوض') : t('قيد المراجعة')}`;
+    const line = document.createElement('small'); line.textContent = `${x.email || x.user_id} • ${t('المرسل:')} ${x.sender_name} • ${t('المرجع:')} ${x.transfer_ref}`;
     const date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ');
-    const notify = document.createElement('small'); notify.textContent = `إشعار Telegram: ${x.notify_status === 'sent' ? 'أُرسل' : x.notify_status === 'failed' ? 'فشل الإرسال' : 'غير مؤكد / غير مفعّل'}`;
+    const notify = document.createElement('small'); notify.textContent = `${t('إشعار Telegram:')} ${x.notify_status === 'sent' ? t('أُرسل') : x.notify_status === 'failed' ? t('فشل الإرسال') : t('غير مؤكد / غير مفعّل')}`;
     info.append(title, line, date, notify);
-    if (x.flags) { const f = document.createElement('small'); f.className = 'pay-flag'; f.textContent = `تنبيه: ${x.flags}`; info.append(f); }
-    if (x.similar_recent) { const f = document.createElement('small'); f.className = 'pay-flag'; f.textContent = `تحقق يدوي: ${x.similar_recent} طلبات مشابهة أقدم`; info.append(f); }
+    if (x.flags) { const f = document.createElement('small'); f.className = 'pay-flag'; f.textContent = `${t('تنبيه:')} ${x.flags}`; info.append(f); }
+    if (x.similar_recent) { const f = document.createElement('small'); f.className = 'pay-flag'; f.textContent = `${t('تحقق يدوي:')} ${x.similar_recent} ${t('طلبات مشابهة أقدم')}`; info.append(f); }
     const actions = document.createElement('div'); actions.className = 'admin-doc-actions';
-    const view = document.createElement('button'); view.type = 'button'; view.className = 'admin-mini'; view.textContent = 'عرض الإيصال';
+    const view = document.createElement('button'); view.type = 'button'; view.className = 'admin-mini'; view.textContent = t('عرض الإيصال');
     view.addEventListener('click', async () => { const { data: signed, error: signErr } = await supabase.storage.from('receipts').createSignedUrl(x.receipt_path, 300); if (signErr || !signed?.signedUrl) showToast('تعذر فتح الإيصال.', 'error'); else window.open(signed.signedUrl, '_blank', 'noopener,noreferrer'); }); actions.append(view);
     if (x.status === 'pending') {
-      const approve = document.createElement('button'); approve.type = 'button'; approve.className = 'admin-mini'; approve.textContent = 'قبول الشحن';
+      const approve = document.createElement('button'); approve.type = 'button'; approve.className = 'admin-mini'; approve.textContent = t('قبول الشحن');
       approve.addEventListener('click', async () => { if (!(await askConfirm(`هل تحققت من وصول ${walletMoney(x.amount)} فعلًا إلى حسابك؟`, 'تأكيد الموافقة', 'قبول الشحن'))) return; approve.disabled = true; const { data: result, error: e } = await supabase.rpc('admin_wallet_approve', { p_id: x.id }); showToast(e ? walletMsg(e) : `تمت إضافة الرصيد. الرصيد الجديد: ${walletMoney(result?.balance)}.`, e ? 'error' : 'success'); await loadAdminWalletTopups(); await loadAdminWalletLedger(); });
-      const reject = document.createElement('button'); reject.type = 'button'; reject.className = 'admin-mini'; reject.textContent = 'رفض';
+      const reject = document.createElement('button'); reject.type = 'button'; reject.className = 'admin-mini'; reject.textContent = t('رفض');
       reject.addEventListener('click', async () => { const reason = window.prompt('سبب رفض طلب الشحن:'); if (!reason) return; const { error: e } = await supabase.rpc('admin_wallet_reject', { p_id: x.id, p_reason: reason }); showToast(e ? walletMsg(e) : 'تم رفض طلب الشحن.', e ? 'error' : 'success'); await loadAdminWalletTopups(); }); actions.append(approve, reject);
     }
     row.append(info, actions); return row;
   }));
 }
 async function loadAdminWalletLedger() {
-  const box = $('#admin-wallet-ledger'); if (!box) return; box.textContent = 'جارٍ تحميل الحركات...';
+  const box = $('#admin-wallet-ledger'); if (!box) return; box.textContent = t('جارٍ تحميل الحركات...');
   const { data, error } = await supabase.rpc('admin_wallet_ledger', { p_limit: 100 });
-  if (error || !Array.isArray(data)) { box.textContent = 'تعذر تحميل الحركات المالية.'; return; }
-  if (!data.length) { box.textContent = 'لا توجد حركات مالية بعد.'; return; }
-  box.replaceChildren(...data.map((x) => { const row = document.createElement('article'); row.className = 'order-item'; const top = document.createElement('div'); top.className = 'order-item-top'; const desc = document.createElement('span'); desc.textContent = `${x.email || 'مستخدم'} • ${x.description || x.kind}`; const amount = document.createElement('strong'); amount.textContent = walletMoney(x.amount); top.append(desc, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • الرصيد بعد العملية: ${walletMoney(x.balance_after)}`; row.append(top, small); return row; }));
+  if (error || !Array.isArray(data)) { box.textContent = t('تعذر تحميل الحركات المالية.'); return; }
+  if (!data.length) { box.textContent = t('لا توجد حركات مالية بعد.'); return; }
+  box.replaceChildren(...data.map((x) => { const row = document.createElement('article'); row.className = 'order-item'; const top = document.createElement('div'); top.className = 'order-item-top'; const desc = document.createElement('span'); desc.textContent = `${x.email || t('مستخدم')} • ${t(x.description || x.kind)}`; const amount = document.createElement('strong'); amount.textContent = walletMoney(x.amount); top.append(desc, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • ${t('الرصيد بعد العملية:')} ${walletMoney(x.balance_after)}`; row.append(top, small); return row; }));
 }
+window.addEventListener('medad-lang', () => { if ($('#admin-wallet-dialog')?.open) { loadAdminWalletSettings(); loadAdminWalletTopups(); loadAdminWalletLedger(); } if ($('#wallet-dialog')?.open) { loadWalletSettings(); loadWalletData(); } });
 $('#aws-status')?.addEventListener('change', loadAdminWalletTopups);
 $('#aws-search')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); loadAdminWalletTopups(); } });
 
