@@ -1690,7 +1690,11 @@ function renderPlans() {
     button.className = 'primary-button full-button';
     button.textContent = `اشترك بـ ${Number(plan.price)} دج`;
     button.addEventListener('click', () => subscribeToPlan(plan.code));
-    card.append(name, price, sheets, button);
+    const walletButton = document.createElement('button');
+    walletButton.type = 'button'; walletButton.className = 'wallet-buy-button full-button';
+    walletButton.textContent = `اشترِ من المحفظة • ${Number(plan.price)} دج`;
+    walletButton.addEventListener('click', () => walletBuyPlan(plan.code, walletButton));
+    card.append(name, price, sheets, button, walletButton);
     grid.append(card);
   });
 }
@@ -2193,6 +2197,7 @@ async function refreshAdminState(user) {
   $('#cats-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#promos-open')?.classList.toggle('is-hidden', !isAdmin);
   $('#payments-open')?.classList.toggle('is-hidden', !isAdmin);
+  $('#admin-wallet-open')?.classList.toggle('is-hidden', !isAdmin);
   if (userId && $('#profile-role')) $('#profile-role').textContent = isAdmin ? 'أدمن' : 'مشتري';
 }
 
@@ -3280,6 +3285,251 @@ $('#pay-settings-form')?.addEventListener('submit', async (e) => {
   const { error } = await supabase.rpc('admin_update_manual_payment_settings', { p_account_name: $('#ps-name').value, p_ccp: $('#ps-ccp').value, p_rip: $('#ps-rip').value, p_note: $('#ps-note').value, p_telegram_chat_id: $('#ps-tg').value, p_telegram_enabled: $('#ps-tg-on').checked });
   showToast(error ? rpcMsg(error, MANUAL_ERRORS) : 'تم حفظ بيانات الحساب.', error ? 'error' : 'success');
 });
+
+
+// ---------- Medad Wallet: user top-ups, ledger and purchases ----------
+const WALLET_ERRORS = {
+  auth: 'سجّل الدخول أولًا.', forbidden: 'ليست لديك صلاحية.', bad_method: 'طريقة الدفع غير متاحة.',
+  bad_input: 'تحقق من المبلغ والبيانات المدخلة.', bad_ref: 'مرجع التحويل غير صالح.', bad_sender: 'اسم صاحب التحويل غير صالح.',
+  bad_receipt: 'ملف إثبات الدفع غير صالح.', receipt_missing: 'تعذر العثور على ملف الإيصال بعد رفعه.',
+  below_min: 'المبلغ أقل من الحد الأدنى لهذه الطريقة.', above_max: 'المبلغ أكبر من الحد الأعلى للشحن.',
+  duplicate_ref: 'مرجع التحويل مستخدم في طلب شحن آخر.', duplicate_receipt: 'هذا الإيصال مستخدم من قبل.',
+  too_many_pending: 'لديك طلبات شحن قيد المراجعة كثيرة. انتظر مراجعتها.', rate_limited: 'وصلت إلى الحد اليومي لطلبات الشحن.',
+  insufficient_funds: 'رصيد المحفظة غير كافٍ. اشحن رصيدك أولًا.', document_not_found: 'الوثيقة لم تعد متاحة للشراء.',
+  plan_not_found: 'هذه الباقة غير متاحة حاليًا.', already_reviewed: 'تمت مراجعة هذا الطلب من قبل.', self_review: 'لا يمكنك مراجعة طلبك بنفسك.',
+  bad_limits: 'حدود الشحن غير صحيحة.', bad_methods: 'إعدادات وسائل الدفع غير صحيحة.', bad_chat_id: 'معرّف Telegram غير صالح.'
+};
+let walletSettingsCache = null;
+function walletMsg(error) { return rpcMsg(error, WALLET_ERRORS); }
+function walletMoney(value) { return `${Number(value || 0).toLocaleString('fr-DZ')} دج`; }
+function setWalletFeedback(message, type = '') {
+  const el = $('#wallet-feedback'); if (!el) return;
+  el.textContent = message || ''; el.className = `auth-feedback ${type}`;
+}
+function setAdminWalletFeedback(message, type = '') {
+  const el = $('#admin-wallet-feedback'); if (!el) return;
+  el.textContent = message || ''; el.className = `auth-feedback ${type}`;
+}
+function walletMethodLabel(code) { return code === 'baridimob' ? 'بريدي موب' : code === 'ccp' ? 'CCP' : code; }
+
+async function loadWalletSettings() {
+  const { data, error } = await supabase.rpc('wallet_public_settings');
+  if (error) throw error;
+  walletSettingsCache = data || {};
+  const select = $('#wallet-method');
+  if (select) {
+    select.replaceChildren();
+    (data.methods || []).forEach((m) => {
+      const opt = document.createElement('option'); opt.value = m.code; opt.textContent = m.label || walletMethodLabel(m.code); opt.dataset.min = String(Number(m.min || data.min_topup || 500)); select.append(opt);
+    });
+    if (!select.options.length) throw new Error('bad_method');
+    const updateMin = () => {
+      const m = select.selectedOptions[0];
+      $('#wallet-amount').min = String(Number(m?.dataset.min || data.min_topup || 500));
+      if (Number($('#wallet-amount').value) < Number($('#wallet-amount').min)) $('#wallet-amount').value = $('#wallet-amount').min;
+    };
+    select.onchange = updateMin; updateMin();
+  }
+  const account = data.account || {};
+  const lines = [];
+  if (account.holder) lines.push(`اسم صاحب الحساب: ${account.holder}`);
+  if (account.ccp) lines.push(`CCP: ${account.ccp}`);
+  if (account.baridimob) lines.push(`RIP / بريدي موب: ${account.baridimob}`);
+  if (account.instructions) lines.push(account.instructions);
+  $('#wallet-payment-instructions').textContent = lines.join(' • ') || 'لم تُضبط معلومات الدفع بعد. تواصل مع الإدارة.';
+  return data;
+}
+
+async function loadWalletData() {
+  if (!supabase) return;
+  const bal = $('#wallet-balance'); const ledger = $('#wallet-ledger-list'); const topups = $('#wallet-topup-list');
+  if (bal) bal.textContent = 'جارٍ التحميل...';
+  if (ledger) ledger.textContent = 'جارٍ التحميل...';
+  if (topups) topups.textContent = 'جارٍ التحميل...';
+  const [balanceRes, ledgerRes, topupRes] = await Promise.all([
+    supabase.rpc('wallet_balance'),
+    supabase.from('wallet_ledger').select('id,kind,amount,balance_after,description,created_at,ref_id').order('id', { ascending: false }).limit(50),
+    supabase.from('wallet_topups').select('id,amount,method,transfer_ref,status,reject_reason,created_at,reviewed_at').order('created_at', { ascending: false }).limit(30)
+  ]);
+  if (bal) bal.textContent = balanceRes.error ? 'تعذر تحميل الرصيد' : walletMoney(balanceRes.data);
+  if (ledger) {
+    if (ledgerRes.error) ledger.textContent = 'تعذر تحميل سجل المحفظة.';
+    else if (!ledgerRes.data?.length) ledger.textContent = 'لا توجد حركات مالية بعد.';
+    else ledger.replaceChildren(...ledgerRes.data.map((x) => {
+      const row = document.createElement('article'); row.className = 'order-item';
+      const top = document.createElement('div'); top.className = 'order-item-top';
+      const title = document.createElement('span'); title.textContent = x.description || ({topup:'شحن المحفظة',purchase:'شراء',refund:'استرداد',adjustment:'تسوية'}[x.kind] || 'عملية محفظة');
+      const amount = document.createElement('strong'); amount.className = Number(x.amount) < 0 ? 'wallet-negative' : 'wallet-positive'; amount.textContent = `${Number(x.amount) > 0 ? '+' : ''}${walletMoney(x.amount)}`;
+      top.append(title, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • الرصيد بعد العملية: ${walletMoney(x.balance_after)}`; row.append(top, small); return row;
+    }));
+  }
+  if (topups) {
+    if (topupRes.error) topups.textContent = 'تعذر تحميل طلبات الشحن.';
+    else if (!topupRes.data?.length) topups.textContent = 'لم ترسل طلب شحن بعد.';
+    else topups.replaceChildren(...topupRes.data.map((x) => {
+      const row = document.createElement('article'); row.className = 'order-item';
+      const top = document.createElement('div'); top.className = 'order-item-top';
+      const title = document.createElement('span'); title.textContent = `${walletMoney(x.amount)} • ${walletMethodLabel(x.method)}`;
+      const state = document.createElement('strong'); state.textContent = x.status === 'approved' ? 'مقبول' : x.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة';
+      top.append(title, state); const small = document.createElement('small'); small.textContent = `المرجع: ${x.transfer_ref} • ${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')}`; row.append(top, small);
+      if (x.status === 'rejected' && x.reject_reason) { const reason = document.createElement('small'); reason.textContent = `سبب الرفض: ${x.reject_reason}`; row.append(reason); }
+      return row;
+    }));
+  }
+}
+
+async function openWalletDialog() {
+  if (!supabase) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { openAuthDialog('login'); return; }
+  closeProfileDropdown();
+  $('#account-dialog')?.close();
+  $('#wallet-dialog')?.showModal();
+  setWalletFeedback('');
+  try { await Promise.all([loadWalletSettings(), loadWalletData()]); }
+  catch (error) { setWalletFeedback(walletMsg(error), 'error'); }
+}
+$('#wallet-open')?.addEventListener('click', openWalletDialog);
+$('#wallet-close')?.addEventListener('click', () => $('#wallet-dialog')?.close());
+$('#wallet-refresh')?.addEventListener('click', async () => { try { await loadWalletData(); setWalletFeedback('تم تحديث بيانات المحفظة.', 'success'); } catch (e) { setWalletFeedback(walletMsg(e), 'error'); } });
+
+$('#wallet-topup-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = $('#wallet-topup-submit'); const file = $('#wallet-receipt')?.files?.[0];
+  if (!file) return setWalletFeedback('اختر صورة أو ملف إثبات الدفع.', 'error');
+  if (file.size > 5 * 1024 * 1024) return setWalletFeedback('حجم الملف يجب ألا يتجاوز 5 ميغابايت.', 'error');
+  if (!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type)) return setWalletFeedback('نوع الملف غير مدعوم. استخدم JPG أو PNG أو WEBP أو PDF.', 'error');
+  button.disabled = true; setWalletFeedback('جارٍ رفع إثبات الدفع...', '');
+  let path = null;
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) throw new Error('auth');
+    const hash = await sha256Hex(file);
+    const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'})[file.type];
+    path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const upload = await supabase.storage.from('receipts').upload(path, file, { contentType: file.type, upsert: false });
+    if (upload.error) throw upload.error;
+    const { data, error } = await supabase.rpc('wallet_create_topup', {
+      p_amount: Number($('#wallet-amount').value), p_method: $('#wallet-method').value,
+      p_ref: $('#wallet-ref').value.trim(), p_sender: $('#wallet-sender').value.trim(), p_receipt_path: path, p_receipt_hash: hash
+    });
+    if (error) throw error;
+    // Best-effort notification: the request is already safely stored even if Telegram is temporarily unavailable.
+    supabase.functions.invoke('telegram-wallet-topup', { body: { topup_id: data } }).catch(() => {});
+    $('#wallet-topup-form').reset();
+    if (walletSettingsCache) await loadWalletSettings();
+    setWalletFeedback('تم إرسال طلب الشحن. لن يُضاف الرصيد إلا بعد مراجعة الإدارة.', 'success');
+    await loadWalletData();
+  } catch (error) {
+    if (path) await supabase.storage.from('receipts').remove([path]).catch(() => {});
+    setWalletFeedback(walletMsg(error), 'error');
+  } finally { button.disabled = false; }
+});
+
+$('#wallet-buy-document')?.addEventListener('click', async (event) => {
+  const button = event.currentTarget; const item = documentCatalog[selectedDocument];
+  if (!item || !supabase || button.disabled) return;
+  button.disabled = true; setPurchaseFeedback('جارٍ التحقق من الرصيد وإتمام الشراء...');
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) { savePendingPurchase({ documentId: selectedDocument, copiesCount: selectedQuantity }); $('#purchase-dialog')?.close(); openAuthDialog('login'); return; }
+    const { data, error } = await supabase.rpc('wallet_buy_document', { p_document_id: item.document_id, p_copies: selectedQuantity, p_request_id: crypto.randomUUID() });
+    if (error) throw error;
+    $('#purchase-dialog')?.close();
+    showToast(`تم الشراء بنجاح. الرصيد المتبقي: ${walletMoney(data.balance)}.`, 'success');
+    const license = await getLicense(data.license_key);
+    if (license) { renderLicense(license); document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    else setNotice('تم الشراء وإنشاء الترخيص. افتح «مستنداتي» لفتحه.', 'success');
+  } catch (error) { setPurchaseFeedback(walletMsg(error), 'error'); }
+  finally { button.disabled = false; }
+});
+
+async function walletBuyPlan(planCode, button) {
+  if (!supabase || !planCode || button.disabled) return;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) { savePendingPurchase({ planCode }); $('#plans-dialog')?.close(); openAuthDialog('login'); return; }
+  button.disabled = true;
+  try {
+    const { data, error } = await supabase.rpc('wallet_buy_plan', { p_plan: planCode, p_request_id: crypto.randomUUID() });
+    if (error) throw error;
+    $('#plans-dialog')?.close();
+    showToast(`تم تفعيل الاشتراك من المحفظة. الرصيد المتبقي: ${walletMoney(data.balance)}.`, 'success');
+    await refreshSubscription(user);
+  } catch (error) { showToast(walletMsg(error), 'error'); }
+  finally { button.disabled = false; }
+}
+
+// ---------- Admin wallet controls ----------
+$('#admin-wallet-open')?.addEventListener('click', async () => {
+  if (!isAdmin) return;
+  closeProfileDropdown(); $('#admin-wallet-dialog')?.showModal();
+  await loadAdminWalletSettings(); await loadAdminWalletTopups(); await loadAdminWalletLedger();
+});
+$('#admin-wallet-close')?.addEventListener('click', () => $('#admin-wallet-dialog')?.close());
+async function loadAdminWalletSettings() {
+  const { data, error } = await supabase.rpc('admin_wallet_get_settings');
+  if (error || !data) { setAdminWalletFeedback(walletMsg(error || new Error('settings')), 'error'); return; }
+  $('#aws-min').value = data.min_topup ?? 500; $('#aws-max').value = data.max_topup ?? 100000;
+  const methods = data.methods || [];
+  $('#aws-ccp-min').value = methods.find((m) => m.code === 'ccp')?.min ?? 500;
+  $('#aws-bm-min').value = methods.find((m) => m.code === 'baridimob')?.min ?? 500;
+  $('#aws-holder').value = data.account?.holder || ''; $('#aws-ccp').value = data.account?.ccp || '';
+  $('#aws-bm').value = data.account?.baridimob || ''; $('#aws-instructions').value = data.account?.instructions || '';
+  $('#aws-chat').value = data.telegram_chat_id || ''; $('#aws-telegram').checked = Boolean(data.telegram_enabled);
+}
+$('#admin-wallet-settings')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const min = Number($('#aws-min').value), max = Number($('#aws-max').value);
+  if (min < 1 || max < min) return setAdminWalletFeedback('تحقق من الحد الأدنى والأعلى.', 'error');
+  const methods = [
+    { code: 'ccp', label: 'CCP', min: Number($('#aws-ccp-min').value), enabled: Boolean($('#aws-ccp').value.trim()) },
+    { code: 'baridimob', label: 'بريدي موب', min: Number($('#aws-bm-min').value), enabled: Boolean($('#aws-bm').value.trim()) }
+  ];
+  if (methods.some((m) => !Number.isInteger(m.min) || m.min < 1)) return setAdminWalletFeedback('الحد الأدنى لكل وسيلة يجب أن يكون عددًا صحيحًا موجبًا.', 'error');
+  const account = { holder: $('#aws-holder').value, ccp: $('#aws-ccp').value, baridimob: $('#aws-bm').value, instructions: $('#aws-instructions').value };
+  if ($('#aws-telegram').checked && !$('#aws-chat').value.trim()) return setAdminWalletFeedback('أدخل Telegram Chat ID قبل تفعيل الإشعارات.', 'error');
+  const { error } = await supabase.rpc('admin_wallet_set_settings', { p_min: min, p_max: max, p_methods: methods, p_account: account, p_telegram: $('#aws-telegram').checked, p_chat_id: $('#aws-chat').value.trim() });
+  setAdminWalletFeedback(error ? walletMsg(error) : 'تم حفظ إعدادات المحفظة.', error ? 'error' : 'success');
+  if (!error) { await loadAdminWalletSettings(); }
+});
+async function loadAdminWalletTopups() {
+  const box = $('#admin-wallet-topups'); if (!box) return; box.textContent = 'جارٍ التحميل...';
+  const status = $('#aws-status')?.value || 'pending'; const search = $('#aws-search')?.value.trim() || '';
+  const { data, error } = await supabase.rpc('admin_wallet_list_topups', { p_status: status === 'all' ? null : status, p_search: search || null, p_from: null, p_to: null, p_limit: 100 });
+  if (error || !Array.isArray(data)) { box.textContent = 'تعذر تحميل طلبات الشحن.'; setAdminWalletFeedback(walletMsg(error), 'error'); return; }
+  if (!data.length) { box.textContent = 'لا توجد طلبات بهذه التصفية.'; return; }
+  box.replaceChildren(...data.map((x) => {
+    const row = document.createElement('article'); row.className = 'admin-doc-row';
+    const info = document.createElement('div'); info.className = 'admin-doc-info';
+    const title = document.createElement('strong'); title.textContent = `${walletMoney(x.amount)} • ${walletMethodLabel(x.method)} • ${x.status === 'approved' ? 'مقبول' : x.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}`;
+    const line = document.createElement('small'); line.textContent = `${x.email || x.user_id} • المرسل: ${x.sender_name} • المرجع: ${x.transfer_ref}`;
+    const date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ');
+    const notify = document.createElement('small'); notify.textContent = `إشعار Telegram: ${x.notify_status === 'sent' ? 'أُرسل' : x.notify_status === 'failed' ? 'فشل الإرسال' : 'غير مؤكد / غير مفعّل'}`;
+    info.append(title, line, date, notify);
+    if (x.flags) { const f = document.createElement('small'); f.className = 'pay-flag'; f.textContent = `تنبيه: ${x.flags}`; info.append(f); }
+    if (x.similar_recent) { const f = document.createElement('small'); f.className = 'pay-flag'; f.textContent = `تحقق يدوي: ${x.similar_recent} طلبات مشابهة أقدم`; info.append(f); }
+    const actions = document.createElement('div'); actions.className = 'admin-doc-actions';
+    const view = document.createElement('button'); view.type = 'button'; view.className = 'admin-mini'; view.textContent = 'عرض الإيصال';
+    view.addEventListener('click', async () => { const { data: signed, error: signErr } = await supabase.storage.from('receipts').createSignedUrl(x.receipt_path, 300); if (signErr || !signed?.signedUrl) showToast('تعذر فتح الإيصال.', 'error'); else window.open(signed.signedUrl, '_blank', 'noopener,noreferrer'); }); actions.append(view);
+    if (x.status === 'pending') {
+      const approve = document.createElement('button'); approve.type = 'button'; approve.className = 'admin-mini'; approve.textContent = 'قبول الشحن';
+      approve.addEventListener('click', async () => { if (!(await askConfirm(`هل تحققت من وصول ${walletMoney(x.amount)} فعلًا إلى حسابك؟`, 'تأكيد الموافقة', 'قبول الشحن'))) return; approve.disabled = true; const { data: result, error: e } = await supabase.rpc('admin_wallet_approve', { p_id: x.id }); showToast(e ? walletMsg(e) : `تمت إضافة الرصيد. الرصيد الجديد: ${walletMoney(result?.balance)}.`, e ? 'error' : 'success'); await loadAdminWalletTopups(); await loadAdminWalletLedger(); });
+      const reject = document.createElement('button'); reject.type = 'button'; reject.className = 'admin-mini'; reject.textContent = 'رفض';
+      reject.addEventListener('click', async () => { const reason = window.prompt('سبب رفض طلب الشحن:'); if (!reason) return; const { error: e } = await supabase.rpc('admin_wallet_reject', { p_id: x.id, p_reason: reason }); showToast(e ? walletMsg(e) : 'تم رفض طلب الشحن.', e ? 'error' : 'success'); await loadAdminWalletTopups(); }); actions.append(approve, reject);
+    }
+    row.append(info, actions); return row;
+  }));
+}
+async function loadAdminWalletLedger() {
+  const box = $('#admin-wallet-ledger'); if (!box) return; box.textContent = 'جارٍ تحميل الحركات...';
+  const { data, error } = await supabase.rpc('admin_wallet_ledger', { p_limit: 100 });
+  if (error || !Array.isArray(data)) { box.textContent = 'تعذر تحميل الحركات المالية.'; return; }
+  if (!data.length) { box.textContent = 'لا توجد حركات مالية بعد.'; return; }
+  box.replaceChildren(...data.map((x) => { const row = document.createElement('article'); row.className = 'order-item'; const top = document.createElement('div'); top.className = 'order-item-top'; const desc = document.createElement('span'); desc.textContent = `${x.email || 'مستخدم'} • ${x.description || x.kind}`; const amount = document.createElement('strong'); amount.textContent = walletMoney(x.amount); top.append(desc, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • الرصيد بعد العملية: ${walletMoney(x.balance_after)}`; row.append(top, small); return row; }));
+}
+$('#aws-status')?.addEventListener('change', loadAdminWalletTopups);
+$('#aws-search')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); loadAdminWalletTopups(); } });
+
 
 // Keep the sheet counters honest: other devices, print-shop prints and the midnight reset all change them off-screen.
 {
