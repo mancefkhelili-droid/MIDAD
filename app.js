@@ -3316,20 +3316,41 @@ async function loadWalletSettings() {
   const { data, error } = await supabase.rpc('wallet_public_settings');
   if (error) throw error;
   walletSettingsCache = data || {};
-  const select = $('#wallet-method');
-  if (select) {
-    select.replaceChildren();
-    (data.methods || []).forEach((m) => {
-      const opt = document.createElement('option'); opt.value = m.code; opt.textContent = (m.code === 'ccp' || m.code === 'baridimob') ? (window.MedadI18n?.tr?.(m.code === 'ccp' ? 'الدفع عبر CCP' : 'الدفع عبر بريدي موب') || walletMethodLabel(m.code)) : (m.label || walletMethodLabel(m.code)); opt.dataset.min = String(Number(m.min || data.min_topup || 500)); select.append(opt);
+  const chipsContainer = $('#wallet-method-chips');
+  const hiddenInput = $('#wallet-method');
+  if (chipsContainer && hiddenInput) {
+    chipsContainer.replaceChildren();
+    const methods = data.methods || [];
+    if (!methods.length) throw new Error('bad_method');
+    methods.forEach((m, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'wallet-method-btn';
+      if (idx === 0) btn.classList.add('active');
+      btn.textContent = (m.code === 'ccp' || m.code === 'baridimob') ? (window.MedadI18n?.tr?.(m.code === 'ccp' ? 'الدفع عبر CCP' : 'الدفع عبر بريدي موب') || walletMethodLabel(m.code)) : (m.label || walletMethodLabel(m.code));
+      btn.dataset.code = m.code;
+      btn.dataset.min = String(Number(m.min || data.min_topup || 500));
+      btn.onclick = (e) => {
+        e.preventDefault();
+        document.querySelectorAll('.wallet-method-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        hiddenInput.value = m.code;
+        const updateMin = () => {
+          $('#wallet-amount').min = String(Math.max(500, Number(btn.dataset.min || data.min_topup || 500)));
+          $('#wallet-amount').placeholder = t('الحد الأدنى للشحن 500 دج');
+          if (Number($('#wallet-amount').value) < Number($('#wallet-amount').min)) $('#wallet-amount').value = $('#wallet-amount').min;
+        };
+        updateMin();
+      };
+      chipsContainer.append(btn);
     });
-    if (!select.options.length) throw new Error('bad_method');
-    const updateMin = () => {
-      const m = select.selectedOptions[0];
-      $('#wallet-amount').min = String(Math.max(500, Number(m?.dataset.min || data.min_topup || 500)));
-      $('#wallet-amount').placeholder = t('الحد الأدنى للشحن 500 دج');
-      if (Number($('#wallet-amount').value) < Number($('#wallet-amount').min)) $('#wallet-amount').value = $('#wallet-amount').min;
-    };
-    select.onchange = updateMin; updateMin();
+    if (hiddenInput.value === '') {
+      hiddenInput.value = methods[0].code;
+      const firstBtn = chipsContainer.querySelector('.wallet-method-btn');
+      if (firstBtn) {
+        $('#wallet-amount').min = String(Math.max(500, Number(firstBtn.dataset.min || data.min_topup || 500)));
+      }
+    }
   }
   const account = data.account || {};
   const lines = [];
