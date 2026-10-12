@@ -969,14 +969,14 @@ html[data-theme="dark"] .ai-result{background:#f9f7ef;color:#24271e}
   .ai-chat-topbar{padding:18px 14px 14px 66px;min-height:112px;align-items:flex-start}
   .ai-chat-topbar h2{font-size:20px;line-height:1.4}
   .ai-chat-topbar p{max-width:none}
-  .ai-settings-gear{left:12px;top:14px;width:40px;height:40px}
+  .ai-settings-gear{left:12px;right:auto;top:14px;width:40px;height:40px}
   .ai-chat-messages{flex:none;min-height:190px;max-height:none;overflow:visible;padding:18px 13px 22px}
   .ai-chat-composer{margin:0 9px 12px;overflow:visible}
   .ai-provider-settings{max-height:none;overflow:visible;scroll-margin-top:12px}
   .ai-provider-settings[open]{padding-bottom:12px}
   .ai-provider-settings summary{font-size:12px;line-height:1.6}
   .ai-provider-settings input:not([type=checkbox]),.ai-provider-settings select{min-height:46px;font-size:15px}
-  .ai-chat-dialog .dialog-close{position:fixed;top:8px;right:8px;left:auto}
+  .ai-chat-dialog .dialog-close{position:fixed;top:8px;right:8px;left:auto;z-index:6}
   .ai-result-actions{max-height:none;overflow:visible}
 }
 /* Standalone team workspace link */
