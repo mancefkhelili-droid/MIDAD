@@ -934,3 +934,6 @@ html[data-theme="dark"] .ai-result{background:#f9f7ef;color:#24271e}
 .team-lock{margin-top:10px;padding:12px;border:1px dashed #d9c27a;border-radius:12px;background:#fffaf0}
 .team-lock p{margin:6px 0 10px;font-size:13px;line-height:1.7;color:#6b5a1d}
 .team-report-grid span:first-of-type{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+
+/* BYOK AI provider settings and shared team fund */
+.ai-provider-settings{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0 14px;background:rgba(251,248,241,.65)}.ai-provider-settings summary{cursor:pointer;font-weight:700;margin-bottom:10px}.ai-provider-settings label{display:flex;flex-direction:column;gap:6px;margin:10px 0;font-size:13px}.ai-provider-settings input{width:100%;min-height:42px;border:1px solid var(--line);border-radius:9px;padding:9px;background:var(--paper);color:var(--ink)}.team-fund{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--warm)}.team-fund p{margin:0 0 8px;font-size:13px;font-weight:700}.team-fund-progress{width:100%;height:12px;accent-color:var(--blue)}
