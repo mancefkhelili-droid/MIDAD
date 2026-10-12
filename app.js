@@ -3597,12 +3597,11 @@ function translateFeatureDialogs(){document.querySelectorAll('[data-i18n]').forE
 function openFeatureDialog(id){if(!currentUser){openAuthDialog('login');return}closeProfileDropdown();$(id)?.showModal();window.lucide?.createIcons()}
 $('#profile-data-open')?.addEventListener('click',async()=>{openFeatureDialog('#profile-data-dialog');await loadProfileData()});
 $('#profile-data-close')?.addEventListener('click',()=>$('#profile-data-dialog')?.close());
-$('#ai-open')?.addEventListener('click',()=>{try{const k=localStorage.getItem('medad-ai-user-api-key');if(k){$('#ai-api-key').value=k;$('#ai-remember-key').checked=true}}catch(_){} openFeatureDialog('#ai-dialog')});
 $('#ai-api-style')?.addEventListener('change',()=>{const style=$('#ai-api-style').value;const base=$('#ai-api-base');const model=$('#ai-model');const presets={responses:['https://api.openai.com/v1','gpt-4.1-mini'],chat_completions:['https://openrouter.ai/api/v1','openai/gpt-4.1-mini'],anthropic:['https://api.anthropic.com/v1','claude-sonnet-4-20250514'],gemini:['https://generativelanguage.googleapis.com/v1beta','gemini-2.5-flash']};if(base&&model){const [b,m]=presets[style]||presets.responses;if(!base.dataset.userEdited)base.value=b;if(!model.dataset.userEdited)model.value=m;}});
 $('#ai-api-base')?.addEventListener('input',()=>{ $('#ai-api-base').dataset.userEdited='1'; });
 $('#ai-model')?.addEventListener('input',()=>{ $('#ai-model').dataset.userEdited='1'; });
 $('#ai-close')?.addEventListener('click',()=>$('#ai-dialog')?.close());
-$('#team-open')?.addEventListener('click',async()=>{openFeatureDialog('#team-dialog');await loadTeamWorkspace()});
+$('#team-open')?.addEventListener('click',(e)=>{e.preventDefault();window.location.href='team.html'});
 $('#team-close')?.addEventListener('click',()=>$('#team-dialog')?.close());
 async function loadProfileData(){if(!supabase||!currentUser)return;const {data,error}=await supabase.from('user_document_profiles').select('*').eq('user_id',currentUser.id).maybeSingle();if(error&&error.code!=='PGRST116'){ $('#profile-data-feedback').textContent=ft('error');return}const d=data||{};[['name','full_name'],['birth','birth_date'],['address','address'],['phone','phone'],['org','organization'],['title','job_title']].forEach(([id,key])=>{$('#pd-'+id).value=d[key]||''});$('#profile-data-feedback').textContent=''}
 $('#profile-data-form')?.addEventListener('submit',async e=>{e.preventDefault();if(!supabase||!currentUser)return;const b=e.submitter;b.disabled=true;const row={user_id:currentUser.id,full_name:$('#pd-name').value.trim(),birth_date:$('#pd-birth').value||null,address:$('#pd-address').value.trim(),phone:$('#pd-phone').value.trim(),organization:$('#pd-org').value.trim(),job_title:$('#pd-title').value.trim(),updated_at:new Date().toISOString()};const {error}=await supabase.from('user_document_profiles').upsert(row,{onConflict:'user_id'});$('#profile-data-feedback').textContent=error?(error.message||ft('error')):ft('saved');$('#profile-data-feedback').className='auth-feedback '+(error?'error':'success');b.disabled=false});
@@ -3658,14 +3657,23 @@ function aiRenderMessage(message, index) {
 }
 function aiRenderConversation() {
   const box=$('#ai-chat-messages'); if(!box)return; box.replaceChildren();
-  if(!activeAiMessages.length){const welcome=$('#ai-welcome');if(welcome)box.append(welcome);else{const empty=document.createElement('div');empty.className='ai-welcome';empty.innerHTML='<div class="ai-welcome-mark"><i data-lucide="sparkles"></i></div><h3>'+aiEsc(aiChatText('aiWelcomeTitle','مرحبًا، لننجز شيئًا مميزًا.'))+'</h3><p>'+aiEsc(aiChatText('aiWelcomeDesc','اطلب تقريرًا أو رسالة أو أرفق ملفًا.'))+'</p>';box.append(empty)}}
-  else activeAiMessages.forEach((m,i)=>box.append(aiRenderMessage(m,i)));
+  if(!activeAiMessages.length){
+    const welcome=document.createElement('div'); welcome.className='ai-welcome';
+    welcome.innerHTML='<div class="ai-welcome-mark"><i data-lucide="sparkles"></i></div><h3>'+aiEsc(aiChatText('aiWelcomeTitle','مرحبًا، لننجز شيئًا مميزًا.'))+'</h3><p>'+aiEsc(aiChatText('aiWelcomeDesc','اطلب تقريرًا أو رسالة أو أرفق ملفًا.'))+'</p><div class="ai-suggestions"><button type="button" data-ai-suggestion="أنشئ تقرير TP جامعيًا باللغة الفرنسية مع مقدمة ومنهجية ونتائج وخاتمة."><i data-lucide="graduation-cap"></i><span>'+aiEsc(aiChatText('aiSuggestionReport','إنشاء تقرير جامعي'))+'</span><i data-lucide="arrow-up-left"></i></button><button type="button" data-ai-suggestion="ساعدني في كتابة رسالة إدارية رسمية وواضحة باللغة العربية."><i data-lucide="file-text"></i><span>'+aiEsc(aiChatText('aiSuggestionLetter','كتابة رسالة إدارية'))+'</span><i data-lucide="arrow-up-left"></i></button><button type="button" data-ai-suggestion="أنشئ سيرة ذاتية احترافية قابلة للتعديل مع أماكن مخصصة لبياناتي."><i data-lucide="briefcase-business"></i><span>'+aiEsc(aiChatText('aiSuggestionCv','إعداد سيرة ذاتية'))+'</span><i data-lucide="arrow-up-left"></i></button></div>';
+    box.append(welcome); welcome.querySelectorAll('[data-ai-suggestion]').forEach(b=>b.addEventListener('click',()=>{$('#ai-prompt').value=b.dataset.aiSuggestion||'';$('#ai-prompt').focus()}));
+  } else activeAiMessages.forEach((m,i)=>box.append(aiRenderMessage(m,i)));
   window.lucide?.createIcons(); box.scrollTop=box.scrollHeight;
 }
 function aiRenderHistory(chats) {
  const box=$('#ai-chat-history');if(!box)return;box.replaceChildren();
  if(!chats?.length){const p=document.createElement('p');p.className='ai-history-empty';p.textContent=aiChatText('aiNoChats','لا توجد محادثات بعد');box.append(p);return;}
- for(const chat of chats){const b=document.createElement('button');b.type='button';b.className='ai-history-item'+(chat.id===activeAiChatId?' active':'');b.innerHTML='<i data-lucide="message-square"></i><span></span><button type="button" class="ai-history-delete" aria-label="حذف المحادثة"><i data-lucide="trash-2"></i></button>';b.querySelector('span').textContent=chat.title||aiChatText('aiNewChat','محادثة جديدة');b.addEventListener('click',()=>aiLoadChat(chat.id));b.querySelector('.ai-history-delete').addEventListener('click',async e=>{e.stopPropagation();if(!supabase||!currentUser)return;const {error}=await supabase.from('medad_ai_chats').delete().eq('id',chat.id).eq('user_id',currentUser.id);if(error){showToast(ft('error'),'error');return}if(activeAiChatId===chat.id){activeAiChatId=null;activeAiMessages=[];aiRenderConversation()}await aiLoadHistory()});box.append(b)}window.lucide?.createIcons();
+ for(const chat of chats){
+   const row=document.createElement('div');row.className='ai-history-row';
+   const b=document.createElement('button');b.type='button';b.className='ai-history-item'+(chat.id===activeAiChatId?' active':'');b.innerHTML='<i data-lucide="message-square"></i><span></span>';b.querySelector('span').textContent=chat.title||aiChatText('aiNewChat','محادثة جديدة');b.addEventListener('click',()=>aiLoadChat(chat.id));
+   const del=document.createElement('button');del.type='button';del.className='ai-history-delete';del.setAttribute('aria-label',aiChatText('aiDeleteChat','حذف المحادثة'));del.title=aiChatText('aiDeleteChat','حذف المحادثة');del.innerHTML='<i data-lucide="trash-2"></i>';del.addEventListener('click',async e=>{e.stopPropagation();if(!supabase||!currentUser)return;if(!confirm(aiChatText('aiDeleteConfirm','حذف هذه المحادثة؟')))return;const {error}=await supabase.from('medad_ai_chats').delete().eq('id',chat.id).eq('user_id',currentUser.id);if(error){showToast(ft('error'),'error');return}if(activeAiChatId===chat.id){activeAiChatId=null;activeAiMessages=[];aiRenderConversation()}await aiLoadHistory()});
+   row.append(b,del);box.append(row)
+ }
+ window.lucide?.createIcons();
 }
 async function aiLoadHistory() {
  if(!supabase||!currentUser){aiRenderHistory([]);return;}
@@ -3705,7 +3713,7 @@ $('#ai-form')?.addEventListener('submit', async (e) => {
  }catch(err){pending.remove();const message=String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message});aiRenderConversation();await aiSaveChat();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
 });
 $('#ai-new-chat')?.addEventListener('click',()=>{activeAiChatId=null;activeAiMessages=[];aiRenderConversation();$('#ai-prompt')?.focus();aiLoadHistory()});
-$('#ai-settings-toggle')?.addEventListener('click',()=>{const d=$('#ai-provider-settings');if(d){d.open=!d.open;d.scrollIntoView({behavior:'smooth',block:'nearest'})}});
+$('#ai-settings-toggle')?.addEventListener('click',()=>{const d=$('#ai-provider-settings');if(d){d.open=!d.open;if(d.open){setTimeout(()=>{d.scrollIntoView({behavior:'smooth',block:'start'});},80)}else{$('#ai-dialog')?.scrollTo({top:0,behavior:'smooth'})}}});
 $('#ai-file')?.addEventListener('change',()=>{const file=$('#ai-file').files?.[0],box=$('#ai-chat-attachment');if(!box)return;box.replaceChildren();if(file){const pill=document.createElement('div');pill.className='ai-attachment-pill';pill.innerHTML='<i data-lucide="file"></i><span></span><button type="button" aria-label="إزالة الملف"><i data-lucide="x"></i></button>';pill.querySelector('span').textContent=file.name+' · '+Math.ceil(file.size/1024)+' KB';pill.querySelector('button').addEventListener('click',()=>{$('#ai-file').value='';box.replaceChildren()});box.append(pill);window.lucide?.createIcons()}});
 document.querySelectorAll('[data-ai-suggestion]').forEach(b=>b.addEventListener('click',()=>{$('#ai-prompt').value=b.dataset.aiSuggestion||'';$('#ai-prompt').focus()}));
 $('#ai-prompt')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#ai-form')?.requestSubmit()}});
