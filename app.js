@@ -3582,3 +3582,162 @@ $('#aws-search')?.addEventListener('keydown', (event) => { if (event.key === 'En
   window.addEventListener('focus', sync);
   window.setInterval(sync, 60000);
 }
+
+// ---------- Medad AI, reusable profile, and team workspace ----------
+const FEATURE_COPY = {
+  ar: {profileDataTitle:'بياناتي لملء الوثائق',profileDataDesc:'احفظ بياناتك مرة واحدة، ثم أدرجها في الوثيقة عند الحاجة.',fullName:'الاسم الكامل',birthDate:'تاريخ الميلاد',address:'العنوان',phone:'رقم الهاتف',organization:'الجامعة / المؤسسة',jobTitle:'الصفة / التخصص',saveProfile:'حفظ البيانات',fillDocument:'ملء الوثيقة المفتوحة ببياناتي',aiTitle:'مساعد مِداد الذكي',aiDesc:'اكتب ما تحتاجه أو ارفع PDF / صورة، وسنحوّله إلى مسودة قابلة للتعديل. راجع المعلومات قبل استعمال الوثيقة.',documentType:'نوع الوثيقة',documentLanguage:'لغة الوثيقة',describeDocument:'صف الوثيقة المطلوبة',uploadSource:'أرفق PDF أو صورة لفهمها أو تحويلها (اختياري)',aiPrivacy:'لا ترفع وثائق حساسة لا تحتاج إلى معالجتها. الحد الأقصى 8 ميغابايت.',generateDraft:'إنشاء المسودة',editableDraft:'مسودة قابلة للتعديل',insertProfile:'إدراج بياناتي',openInEditor:'فتح في محرر مِداد',printDraft:'طباعة / حفظ PDF',teamTitle:'مساحة الفريق',teamDesc:'رصيد مشترك للأعضاء مع سجل استهلاك شهري. كل عضو يستخدم حسابه الخاص.',createTeam:'إنشاء فريق',teamName:'اسم الفريق',createTeamBtn:'إنشاء فريق',joinTeam:'الانضمام إلى فريق',inviteCode:'رمز الدعوة',joinTeamBtn:'انضمام',teamUsage:'استهلاك الفريق',noTeam:'لا تنتمي إلى فريق بعد.',teamCreated:'تم إنشاء الفريق. احفظ رمز الدعوة وشاركه مع الأعضاء.',saved:'تم حفظ البيانات.',needLogin:'سجّل الدخول أولًا.',generating:'جارٍ إنشاء المسودة…',generated:'تم إنشاء المسودة. راجعها وعدّلها قبل الاستخدام.',monthly:'الشهر',member:'العضو',actions:'عمليات إنشاء',teamBalance:'الرصيد المشترك',copyCode:'رمز الدعوة',error:'تعذر إكمال العملية.'},
+  fr: {profileDataTitle:'Mes données pour les documents',profileDataDesc:'Enregistrez vos informations une fois et insérez-les dans vos documents.',fullName:'Nom complet',birthDate:'Date de naissance',address:'Adresse',phone:'Téléphone',organization:'Université / organisme',jobTitle:'Fonction / spécialité',saveProfile:'Enregistrer',fillDocument:'Remplir le document ouvert',aiTitle:'Assistant intelligent Medad',aiDesc:'Décrivez le document ou importez un PDF / une image pour créer un brouillon modifiable. Vérifiez les informations avant utilisation.',documentType:'Type de document',documentLanguage:'Langue du document',describeDocument:'Décrivez le document souhaité',uploadSource:'Joindre un PDF ou une image (facultatif)',aiPrivacy:'Évitez les documents sensibles. Taille maximale : 8 Mo.',generateDraft:'Générer le brouillon',editableDraft:'Brouillon modifiable',insertProfile:'Insérer mes données',openInEditor:'Ouvrir dans l’éditeur Medad',printDraft:'Imprimer / enregistrer en PDF',teamTitle:'Espace équipe',teamDesc:'Solde partagé et rapport mensuel. Chaque membre conserve son propre compte.',createTeam:'Créer une équipe',teamName:'Nom de l’équipe',createTeamBtn:'Créer l’équipe',joinTeam:'Rejoindre une équipe',inviteCode:'Code d’invitation',joinTeamBtn:'Rejoindre',teamUsage:'Consommation de l’équipe',noTeam:'Vous ne faites pas encore partie d’une équipe.',teamCreated:'Équipe créée. Conservez et partagez le code d’invitation.',saved:'Données enregistrées.',needLogin:'Veuillez vous connecter.',generating:'Création du brouillon…',generated:'Brouillon créé. Vérifiez-le et modifiez-le avant utilisation.',monthly:'Mois',member:'Membre',actions:'Générations',teamBalance:'Solde partagé',copyCode:'Code d’invitation',error:'Impossible de terminer cette opération.'},
+  en: {profileDataTitle:'My document profile',profileDataDesc:'Save your details once and insert them into documents when needed.',fullName:'Full name',birthDate:'Date of birth',address:'Address',phone:'Phone number',organization:'University / organization',jobTitle:'Role / specialty',saveProfile:'Save profile',fillDocument:'Fill open document with my details',aiTitle:'Medad AI assistant',aiDesc:'Describe a document or upload a PDF/image to create an editable draft. Review it before use.',documentType:'Document type',documentLanguage:'Document language',describeDocument:'Describe the document you need',uploadSource:'Attach a PDF or image (optional)',aiPrivacy:'Avoid uploading sensitive documents. Maximum size: 8 MB.',generateDraft:'Generate draft',editableDraft:'Editable draft',insertProfile:'Insert my details',openInEditor:'Open in Medad editor',printDraft:'Print / Save PDF',teamTitle:'Team workspace',teamDesc:'Shared balance and monthly usage reports. Each member keeps their own account.',createTeam:'Create a team',teamName:'Team name',createTeamBtn:'Create team',joinTeam:'Join a team',inviteCode:'Invitation code',joinTeamBtn:'Join team',teamUsage:'Team usage',noTeam:'You are not part of a team yet.',teamCreated:'Team created. Save and share the invitation code.',saved:'Profile saved.',needLogin:'Please sign in first.',generating:'Generating draft…',generated:'Draft created. Review and edit it before use.',monthly:'Month',member:'Member',actions:'Generations',teamBalance:'Shared balance',copyCode:'Invitation code',error:'The operation could not be completed.'}
+};
+const FEATURE_EXTRA = {"ar": {"aiConsent": "أوافق على إرسال وصفي والملف المرفق (إن وُجد) إلى مزوّد الذكاء الاصطناعي لمعالجتهما.", "aiSendProfile": "استعمال بياناتي المحفوظة في هذه المسودة (الاسم، العنوان، الهاتف...)", "aiNeedConsent": "فعّل خانة الموافقة على المعالجة أولًا.", "ai_rate_limited": "بلغت الحد اليومي لمساعد الذكاء الاصطناعي. جرّب غدًا.", "ai_busy": "المساعد مشغول الآن. حاول بعد قليل.", "ai_paid_required": "المساعد الذكي متاح للمشتركين أو لمن يملك أكثر من 10 أوراق.", "ai_disabled": "المساعد الذكي متوقف مؤقتًا.", "ai_not_configured": "المساعد الذكي غير مفعّل بعد.", "ai_file_type": "نوع الملف غير مدعوم. استعمل PDF أو PNG أو JPG أو WEBP.", "ai_file_too_big": "الملف أكبر من 8 ميغابايت أو غير صالح.", "ai_provider": "تعذر الوصول إلى خدمة الذكاء الاصطناعي. حاول لاحقًا.", "ai_empty": "لم تُنتج الخدمة مسودة. أعد صياغة طلبك.", "ai_auth": "سجّل الدخول أولًا.", "ai_too_long": "الوصف طويل جدًا.", "inviteLockedTitle": "لا يمكنك دعوة الآخرين بعد", "inviteLockedBody": "الدعوة متاحة بعد الاشتراك في باقة، أو عندما يصبح لديك أكثر من 10 أوراق. أوراقك الحالية: {n}.", "subscribeBtn": "الاشتراك والباقات", "leaveTeam": "مغادرة الفريق", "regenCode": "رمز دعوة جديد", "removeMember": "إزالة", "teamCreatedLocked": "تم إنشاء الفريق. لتفعيل الدعوة اشترك في باقة أو احصل على أكثر من 10 أوراق.", "teamJoined": "انضممت إلى الفريق.", "teamCodeNew": "تم إنشاء رمز دعوة جديد. الرمز القديم لم يعد يعمل.", "confirmLeave": "هل تريد مغادرة الفريق؟", "confirmRemove": "إزالة هذا العضو من الفريق؟", "e_invalid_invite_code": "رمز الدعوة غير صحيح.", "e_inviter_not_eligible": "لا يمكن الانضمام الآن: صاحب الفريق لا يملك اشتراكًا ساريًا ولا أكثر من 10 أوراق.", "e_team_full": "الفريق مكتمل (20 عضوًا).", "e_already_in_team": "أنت عضو في فريق بالفعل.", "e_too_many_attempts": "محاولات خاطئة كثيرة. حاول بعد ساعة.", "e_owner_has_members": "أزل الأعضاء أولًا ثم غادر الفريق.", "e_bad_name": "اسم الفريق من حرفين إلى 100 حرف.", "e_not_owner": "هذا الإجراء لصاحب الفريق فقط.", "e_invite_not_allowed": "الدعوة تتطلب اشتراكًا أو أكثر من 10 أوراق.", "e_not_in_team": "لست في فريق.", "e_cannot_remove_owner": "لا يمكن إزالة صاحب الفريق.", "e_auth_required": "سجّل الدخول أولًا."}, "fr": {"aiConsent": "J’accepte l’envoi de ma demande et du fichier joint (le cas échéant) au fournisseur d’IA pour traitement.", "aiSendProfile": "Utiliser mes données enregistrées dans ce brouillon (nom, adresse, téléphone…)", "aiNeedConsent": "Cochez d’abord la case de consentement.", "ai_rate_limited": "Limite quotidienne atteinte. Réessayez demain.", "ai_busy": "Le service est occupé. Réessayez dans un instant.", "ai_paid_required": "L’assistant est réservé aux abonnés ou aux comptes ayant plus de 10 feuilles.", "ai_disabled": "L’assistant est temporairement désactivé.", "ai_not_configured": "L’assistant n’est pas encore activé.", "ai_file_type": "Type de fichier non pris en charge (PDF, PNG, JPG, WEBP).", "ai_file_too_big": "Fichier trop volumineux (8 Mo) ou invalide.", "ai_provider": "Service IA injoignable. Réessayez plus tard.", "ai_empty": "Aucun brouillon généré. Reformulez votre demande.", "ai_auth": "Veuillez vous connecter.", "ai_too_long": "Description trop longue.", "inviteLockedTitle": "Vous ne pouvez pas encore inviter", "inviteLockedBody": "L’invitation est possible avec un abonnement ou plus de 10 feuilles. Vos feuilles : {n}.", "subscribeBtn": "Abonnements", "leaveTeam": "Quitter l’équipe", "regenCode": "Nouveau code", "removeMember": "Retirer", "teamCreatedLocked": "Équipe créée. Abonnez-vous ou ayez plus de 10 feuilles pour activer l’invitation.", "teamJoined": "Vous avez rejoint l’équipe.", "teamCodeNew": "Nouveau code créé. L’ancien ne fonctionne plus.", "confirmLeave": "Quitter l’équipe ?", "confirmRemove": "Retirer ce membre ?", "e_invalid_invite_code": "Code d’invitation incorrect.", "e_inviter_not_eligible": "Impossible de rejoindre : le propriétaire n’a ni abonnement actif ni plus de 10 feuilles.", "e_team_full": "Équipe complète (20 membres).", "e_already_in_team": "Vous êtes déjà dans une équipe.", "e_too_many_attempts": "Trop d’essais. Réessayez dans une heure.", "e_owner_has_members": "Retirez d’abord les membres.", "e_bad_name": "Nom de 2 à 100 caractères.", "e_not_owner": "Réservé au propriétaire.", "e_invite_not_allowed": "L’invitation exige un abonnement ou plus de 10 feuilles.", "e_not_in_team": "Vous n’êtes pas dans une équipe.", "e_cannot_remove_owner": "Impossible de retirer le propriétaire.", "e_auth_required": "Veuillez vous connecter."}, "en": {"aiConsent": "I agree to send my request and the attached file (if any) to the AI provider for processing.", "aiSendProfile": "Use my saved details in this draft (name, address, phone…)", "aiNeedConsent": "Tick the consent box first.", "ai_rate_limited": "Daily AI limit reached. Try again tomorrow.", "ai_busy": "The assistant is busy. Try again shortly.", "ai_paid_required": "The assistant is for subscribers or accounts with more than 10 sheets.", "ai_disabled": "The assistant is temporarily disabled.", "ai_not_configured": "The assistant is not enabled yet.", "ai_file_type": "Unsupported file type (PDF, PNG, JPG, WEBP).", "ai_file_too_big": "File is over 8 MB or invalid.", "ai_provider": "Could not reach the AI service. Try later.", "ai_empty": "No draft was produced. Rephrase your request.", "ai_auth": "Please sign in.", "ai_too_long": "Description is too long.", "inviteLockedTitle": "You can’t invite others yet", "inviteLockedBody": "Inviting needs a subscription or more than 10 sheets. Your sheets: {n}.", "subscribeBtn": "Plans", "leaveTeam": "Leave team", "regenCode": "New invite code", "removeMember": "Remove", "teamCreatedLocked": "Team created. Subscribe or hold more than 10 sheets to enable invitations.", "teamJoined": "You joined the team.", "teamCodeNew": "New invite code created. The old one no longer works.", "confirmLeave": "Leave this team?", "confirmRemove": "Remove this member?", "e_invalid_invite_code": "Invalid invitation code.", "e_inviter_not_eligible": "Cannot join: the team owner has no active subscription and no more than 10 sheets.", "e_team_full": "Team is full (20 members).", "e_already_in_team": "You are already in a team.", "e_too_many_attempts": "Too many wrong attempts. Try again in an hour.", "e_owner_has_members": "Remove the members first.", "e_bad_name": "Name must be 2–100 characters.", "e_not_owner": "Owner only.", "e_invite_not_allowed": "Inviting needs a subscription or more than 10 sheets.", "e_not_in_team": "You are not in a team.", "e_cannot_remove_owner": "The owner cannot be removed.", "e_auth_required": "Please sign in."}};
+for (const lang of Object.keys(FEATURE_EXTRA)) Object.assign(FEATURE_COPY[lang], FEATURE_EXTRA[lang]);
+function featureLang(){return ['ar','fr','en'].includes(curLang())?curLang():'ar'}
+function ft(k){return FEATURE_COPY[featureLang()][k]||FEATURE_COPY.ar[k]||k}
+function translateFeatureDialogs(){document.querySelectorAll('[data-i18n]').forEach(el=>{const key=el.dataset.i18n;const val=ft(key);if(!val)return;if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')el.placeholder=val;else if(el.children.length && el.tagName==='LABEL'){const input=el.querySelector('input,textarea,select');if(input){const first=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE);if(first)first.textContent=val;else el.prepend(document.createTextNode(val))}}else el.textContent=val});const kind=$('#ai-kind');if(kind){const opts={ar:['طلب أو رسالة إدارية','تقرير أكاديمي / TP','سيرة ذاتية','أخرى'],fr:['Demande / lettre administrative','Rapport académique / TP','CV','Autre'],en:['Administrative letter','Academic report / lab','CV / résumé','Other']}[featureLang()];[...kind.options].forEach((o,i)=>o.textContent=opts[i])}}
+function openFeatureDialog(id){if(!currentUser){openAuthDialog('login');return}closeProfileDropdown();$(id)?.showModal();window.lucide?.createIcons()}
+$('#profile-data-open')?.addEventListener('click',async()=>{openFeatureDialog('#profile-data-dialog');await loadProfileData()});
+$('#profile-data-close')?.addEventListener('click',()=>$('#profile-data-dialog')?.close());
+$('#ai-open')?.addEventListener('click',()=>openFeatureDialog('#ai-dialog'));
+$('#ai-close')?.addEventListener('click',()=>$('#ai-dialog')?.close());
+$('#team-open')?.addEventListener('click',async()=>{openFeatureDialog('#team-dialog');await loadTeamWorkspace()});
+$('#team-close')?.addEventListener('click',()=>$('#team-dialog')?.close());
+async function loadProfileData(){if(!supabase||!currentUser)return;const {data,error}=await supabase.from('user_document_profiles').select('*').eq('user_id',currentUser.id).maybeSingle();if(error&&error.code!=='PGRST116'){ $('#profile-data-feedback').textContent=ft('error');return}const d=data||{};[['name','full_name'],['birth','birth_date'],['address','address'],['phone','phone'],['org','organization'],['title','job_title']].forEach(([id,key])=>{$('#pd-'+id).value=d[key]||''});$('#profile-data-feedback').textContent=''}
+$('#profile-data-form')?.addEventListener('submit',async e=>{e.preventDefault();if(!supabase||!currentUser)return;const b=e.submitter;b.disabled=true;const row={user_id:currentUser.id,full_name:$('#pd-name').value.trim(),birth_date:$('#pd-birth').value||null,address:$('#pd-address').value.trim(),phone:$('#pd-phone').value.trim(),organization:$('#pd-org').value.trim(),job_title:$('#pd-title').value.trim(),updated_at:new Date().toISOString()};const {error}=await supabase.from('user_document_profiles').upsert(row,{onConflict:'user_id'});$('#profile-data-feedback').textContent=error?(error.message||ft('error')):ft('saved');$('#profile-data-feedback').className='auth-feedback '+(error?'error':'success');b.disabled=false});
+async function getDocumentProfile(){if(!supabase||!currentUser)return {};const {data}=await supabase.from('user_document_profiles').select('*').eq('user_id',currentUser.id).maybeSingle();return data||{}}
+function applyProfileToEditable(root,profile){const values={name:profile.full_name||'',full_name:profile.full_name||'',birth_date:profile.birth_date||'',address:profile.address||'',phone:profile.phone||'',organization:profile.organization||'',job_title:profile.job_title||''};const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);nodes.forEach(n=>{n.nodeValue=n.nodeValue.replace(/\{\{\s*(name|full_name|birth_date|address|phone|organization|job_title)\s*\}\}/gi,(m,k)=>values[k.toLowerCase()]??m)});}
+$('#profile-fill-document')?.addEventListener('click',async()=>{const root=$('#document-content');if(!root){$('#profile-data-feedback').textContent=ft('error');return}const profile=await getDocumentProfile();applyProfileToEditable(root,profile);$('#profile-data-feedback').textContent=ft('saved');$('#profile-data-dialog')?.close();showToast(ft('saved'),'success')});
+function fileToDataUrl(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=reject;r.readAsDataURL(file)})}
+const AI_CSS_OK = new Set(['color', 'background-color', 'text-align', 'font-weight', 'font-size', 'font-style', 'line-height', 'margin', 'margin-top', 'margin-bottom', 'padding', 'border', 'border-top', 'border-bottom', 'border-collapse', 'width', 'letter-spacing', 'text-decoration']);
+function sanitizeAiHtml(value) {
+  // Allow-list only: known tags, dir/colspan/rowspan, and a short list of harmless CSS properties (no url(), no positioning).
+  const tags = new Set(['P', 'BR', 'HR', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'DIV', 'SPAN', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD']);
+  const source = new DOMParser().parseFromString(String(value ?? ''), 'text/html');
+  const cleanStyle = (css) => css.split(';').map((d) => d.trim()).filter(Boolean).map((d) => {
+    const k = d.indexOf(':'); if (k < 1) return '';
+    const prop = d.slice(0, k).trim().toLowerCase(); const val = d.slice(k + 1).trim();
+    return AI_CSS_OK.has(prop) && /^[#a-z0-9\s.,%()-]{1,80}$/i.test(val) && !/url|expression|javascript|import/i.test(val) ? `${prop}:${val}` : '';
+  }).filter(Boolean).join(';');
+  const clean = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent ?? '');
+    if (node.nodeType !== Node.ELEMENT_NODE) return document.createDocumentFragment();
+    if (['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'FORM', 'TEMPLATE'].includes(node.tagName.toUpperCase())) return document.createDocumentFragment();
+    const holder = tags.has(node.tagName) ? document.createElement(node.tagName.toLowerCase()) : document.createDocumentFragment();
+    if (holder.nodeType === Node.ELEMENT_NODE) {
+      const dir = node.getAttribute('dir'); if (['ltr', 'rtl'].includes(dir)) holder.setAttribute('dir', dir);
+      for (const name of ['colspan', 'rowspan']) { const v = node.getAttribute(name); if (/^\d{1,2}$/.test(v ?? '')) holder.setAttribute(name, v); }
+      const st = cleanStyle(node.getAttribute('style') ?? ''); if (st) holder.setAttribute('style', st);
+    }
+    for (const child of node.childNodes) holder.append(clean(child));
+    return holder;
+  };
+  const out = document.createDocumentFragment();
+  for (const child of source.body.childNodes) out.append(clean(child));
+  return out;
+}
+async function aiInvokeErrorCode(err) {
+  try { const r = err?.context; if (r && typeof r.clone === 'function') return (await r.clone().json())?.error_code || ''; } catch (_) { /* not JSON */ }
+  return '';
+}
+$('#ai-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!supabase || !currentUser) { openAuthDialog('login'); return; }
+  const fb = $('#ai-feedback'); fb.className = 'auth-feedback';
+  const prompt = $('#ai-prompt').value.trim(); const file = $('#ai-file').files?.[0];
+  if (!prompt && !file) { fb.textContent = ft('describeDocument'); return; }
+  if (file && file.size > 8 * 1024 * 1024) { fb.textContent = ft('aiPrivacy'); return; }
+  if (!$('#ai-consent')?.checked) { fb.textContent = ft('aiNeedConsent'); fb.className = 'auth-feedback error'; return; }
+  const button = $('#ai-generate'); if (button.disabled) return;
+  button.disabled = true; fb.textContent = ft('generating');
+  try {
+    const attachment = file ? { name: file.name, type: file.type, data_url: await fileToDataUrl(file) } : null;
+    // Personal details are sent only when the user ticks the box, and only the saved fields.
+    let profileBody = {};
+    if ($('#ai-send-profile')?.checked) { const p = await getDocumentProfile(); profileBody = { full_name: p.full_name || '', birth_date: p.birth_date || '', address: p.address || '', phone: p.phone || '', organization: p.organization || '', job_title: p.job_title || '' }; }
+    const { data, error } = await supabase.functions.invoke('medad-ai-document', { body: { prompt, kind: $('#ai-kind').value, language: $('#ai-language').value, consent: true, attachment, profile: profileBody } });
+    if (error) { const code = await aiInvokeErrorCode(error); const key = `ai_${code}`; const msg = ft(key); throw new Error(msg === key ? ft('error') : msg); }
+    if (!data?.html) throw new Error(ft('error'));
+    $('#ai-result').replaceChildren(sanitizeAiHtml(data.html));
+    $('#ai-result-wrap').classList.remove('is-hidden');
+    fb.textContent = ft('generated'); fb.className = 'auth-feedback success';
+  } catch (err) { fb.textContent = String(err?.message || ft('error')).slice(0, 300); fb.className = 'auth-feedback error'; }
+  finally { button.disabled = false; }
+});
+$('#ai-use-profile')?.addEventListener('click',async()=>applyProfileToEditable($('#ai-result'),await getDocumentProfile()));
+$('#ai-open-editor')?.addEventListener('click',()=>{const content=$('#document-content');if(!content){showToast(ft('error'),'error');return}content.replaceChildren(sanitizeAiHtml($('#ai-result').innerHTML));$('#ai-dialog')?.close();document.body.classList.remove('landing-on');$('#workspace')?.scrollIntoView({behavior:'smooth',block:'start'});showToast(ft('generated'),'success')});
+$('#ai-print')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w){showToast('Allow pop-ups to print','error');return}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Medad</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.8;padding:24px;color:#20231b}h1,h2{color:#485331}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd2bc;padding:8px}</style></head><body>'+$('#ai-result').innerHTML+'</body></html>');w.document.close();w.focus();w.print()});
+function featureErr(error) {
+  const m = String(error?.message || '');
+  const keys = ['invalid_invite_code', 'inviter_not_eligible', 'team_full', 'already_in_team', 'too_many_attempts', 'owner_has_members', 'bad_name', 'not_owner', 'invite_not_allowed', 'not_in_team', 'cannot_remove_owner', 'auth_required'];
+  const k = keys.find((x) => m.includes(x));
+  return k ? ft('e_' + k) : ft('error');
+}
+async function loadTeamWorkspace() {
+  if (!supabase || !currentUser) return;
+  const box = $('#team-current'), report = $('#team-report'), fb = $('#team-feedback');
+  box.textContent = '…'; report.replaceChildren();
+  const { data, error } = await supabase.rpc('medad_team_summary', { p_month: teamMonthRange() });
+  if (error) { box.textContent = ft('noTeam'); fb.textContent = featureErr(error); return; }
+  const inTeam = Boolean(data?.team);
+  $('#team-create-form')?.classList.toggle('is-hidden', inTeam);
+  $('#team-join-form')?.classList.toggle('is-hidden', inTeam);
+  if (!inTeam) { box.textContent = ft('noTeam'); return; }
+  const team = data.team;
+  const card = document.createElement('article'); card.className = 'order-item';
+  const title = document.createElement('strong'); title.textContent = team.name; card.append(title);
+  if (team.is_owner) {
+    if (team.invite_code) {
+      const line = document.createElement('small'); line.append(`${ft('copyCode')}: `);
+      const code = document.createElement('b'); code.dir = 'ltr'; code.textContent = team.invite_code; line.append(code); card.append(line);
+      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'admin-mini'; copy.textContent = ft('copyCode');
+      copy.onclick = () => navigator.clipboard?.writeText(team.invite_code).then(() => showToast(ft('saved'), 'success')).catch(() => {});
+      const regen = document.createElement('button'); regen.type = 'button'; regen.className = 'admin-mini'; regen.textContent = ft('regenCode');
+      regen.onclick = async () => { const { error: e } = await supabase.rpc('medad_team_regenerate_code'); fb.textContent = e ? featureErr(e) : ft('teamCodeNew'); if (!e) loadTeamWorkspace(); };
+      card.append(copy, regen);
+    } else {
+      // The invitation is locked until the owner subscribes or holds more than 10 sheets.
+      const lock = document.createElement('div'); lock.className = 'team-lock';
+      const h = document.createElement('strong'); h.textContent = ft('inviteLockedTitle');
+      const p = document.createElement('p'); p.textContent = ft('inviteLockedBody').replace('{n}', String(data.invite_status?.sheets_remaining ?? 0));
+      const go = document.createElement('button'); go.type = 'button'; go.className = 'admin-mini'; go.textContent = ft('subscribeBtn');
+      go.onclick = () => { $('#team-dialog')?.close(); openPlans(); };
+      lock.append(h, p, go); card.append(lock);
+    }
+  }
+  const leave = document.createElement('button'); leave.type = 'button'; leave.className = 'admin-mini danger'; leave.textContent = ft('leaveTeam');
+  leave.onclick = async () => { if (!(await confirmAction(ft('confirmLeave'), ft('leaveTeam')))) return; const { error: e } = await supabase.rpc('medad_team_leave'); fb.textContent = e ? featureErr(e) : ''; loadTeamWorkspace(); };
+  card.append(leave);
+  box.replaceChildren(card);
+  const members = Array.isArray(data.usage) ? data.usage : [];
+  if (!members.length) { report.textContent = '—'; return; }
+  const table = document.createElement('div'); table.className = 'team-report-grid';
+  for (const k of ['member', 'actions']) { const h = document.createElement('strong'); h.textContent = ft(k); table.append(h); }
+  members.forEach((m) => {
+    const n = document.createElement('span'); n.textContent = m.member_name || m.email || 'Member';
+    if (team.is_owner && m.user_id !== currentUser.id) {
+      const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'admin-mini danger'; rm.textContent = ft('removeMember'); rm.style.marginInlineStart = '8px';
+      rm.onclick = async () => { if (!(await confirmAction(ft('confirmRemove'), ft('removeMember')))) return; const { error: e } = await supabase.rpc('medad_team_remove_member', { p_user: m.user_id }); fb.textContent = e ? featureErr(e) : ''; loadTeamWorkspace(); };
+      n.append(rm);
+    }
+    const c = document.createElement('span'); c.textContent = String(m.generations || 0);
+    table.append(n, c);
+  });
+  report.replaceChildren(table);
+}
+function escapeFeatureText(v){const d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML}
+function teamMonthRange(){const now=new Date();if($('#team-month')?.value==='previous')now.setMonth(now.getMonth()-1);return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`}
+$('#team-month')?.addEventListener('change',loadTeamWorkspace);
+$('#team-create-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault(); if (!supabase || !currentUser) return;
+  const { data, error } = await supabase.rpc('medad_team_create', { p_name: $('#team-name').value.trim() });
+  $('#team-feedback').textContent = error ? featureErr(error) : (data?.invite_locked ? ft('teamCreatedLocked') : ft('teamCreated'));
+  if (!error) await loadTeamWorkspace();
+});
+$('#team-join-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault(); if (!supabase || !currentUser) return;
+  const { data, error } = await supabase.rpc('medad_team_join', { p_code: $('#team-code').value.trim().toUpperCase() });
+  if (error) { $('#team-feedback').textContent = featureErr(error); return; }
+  if (!data?.ok) { $('#team-feedback').textContent = ft('e_' + data.error); return; }
+  $('#team-feedback').textContent = ft('teamJoined');
+  await loadTeamWorkspace();
+});
+window.addEventListener('medad-lang',translateFeatureDialogs);translateFeatureDialogs();
