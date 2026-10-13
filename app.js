@@ -3697,7 +3697,7 @@ function aiProviderCandidates(apiKey, rawBase, rawModel, rawStyle) {
   const base = String(rawBase || '').trim();
   const style = rawStyle && rawStyle !== 'auto' ? rawStyle : '';
   const byKey = () => {
-    if (/^AIza/.test(apiKey)) return [{ style: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta', model: AI_DEFAULT_MODEL.gemini }];
+    if (/^AIza|^AQ\./.test(apiKey)) return [{ style: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta', model: AI_DEFAULT_MODEL.gemini }];
     if (/^sk-ant-/.test(apiKey)) return [{ style: 'anthropic', base: 'https://api.anthropic.com/v1', model: AI_DEFAULT_MODEL.anthropic }];
     if (/^sk-or-/.test(apiKey)) return [{ style: 'chat_completions', base: 'https://openrouter.ai/api/v1', model: AI_DEFAULT_MODEL.chat_completions }];
     if (/^gsk_/.test(apiKey)) return [{ style: 'chat_completions', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }];
