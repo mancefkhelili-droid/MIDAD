@@ -981,3 +981,64 @@ html[data-theme="dark"] .ai-result{background:#f9f7ef;color:#24271e}
 }
 /* Standalone team workspace link */
 #team-open{display:flex;align-items:center;gap:10px;text-decoration:none}.team-open-arrow{margin-inline-start:auto;opacity:.6}
+
+/* ========== Unified button system (v56): every button follows the site theme ========== */
+:root{--btn-bg:#eef1e0;--btn-bd:#d2d7b9;--btn-fg:#282b18;--btn-hover-bg:#535a34;--btn-hover-fg:#fff;--soft-bg:#f6f8ef;--soft-bd:#e5e8d5;--soft-fg:#4b512f;--soft-hover:#eef1e0;--accent:#535a34;--danger-bg:#fef2f2;--danger-bd:#fecaca;--danger-fg:#b91c1c}
+html[data-theme="dark"]{--btn-bg:#272a1a;--btn-bd:#444732;--btn-fg:#dde1c9;--soft-bg:#1f2215;--soft-bd:#444732;--soft-fg:#cfd5b6;--soft-hover:#272a1a;--accent:#e3d8b4;--danger-bg:#250c0c;--danger-bd:#5a1818;--danger-fg:#ea7676}
+button:focus-visible,.seg-chip:focus-visible,.wallet-method-btn:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ai-send-button,.team-primary{color:var(--btn-fg);background:var(--btn-bg);border:1px solid var(--btn-bd);transition:background .18s,color .18s,border-color .18s,transform .12s}
+.ai-send-button:not(:disabled):hover,.team-primary:not(:disabled):hover{color:var(--btn-hover-fg);background:var(--btn-hover-bg);border-color:var(--btn-hover-bg)}
+.ai-send-button:active,.team-primary:active,.seg-chip:active,.wallet-method-btn:active{transform:scale(.97)}
+.ai-send-button:disabled,.team-primary:disabled{opacity:.55;cursor:wait}
+.secondary-button,.admin-mini,.wallet-buy-button,.ai-tool-btn,.ai-attach-button,.ai-settings-gear,.ai-suggestions button,.shop-button,.quick-qty button{transition:background .18s,color .18s,border-color .18s,transform .12s}
+.wallet-buy-button,.feature-dialog .secondary-button{border:1px solid var(--soft-bd);background:var(--soft-bg);color:var(--soft-fg)}
+.wallet-buy-button:hover,.feature-dialog .secondary-button:hover{background:var(--soft-hover);border-color:var(--btn-bd)}
+html[data-theme="dark"] .wallet-buy-button{background:var(--soft-bg);color:var(--soft-fg);border-color:var(--soft-bd)}
+html[data-theme="dark"] .ai-send-button{background:var(--btn-bg);color:var(--btn-fg)}
+.ai-attach-button,.ai-settings-gear{border:1px solid var(--soft-bd);background:var(--soft-bg);color:var(--soft-fg)}
+.ai-attach-button:hover,.ai-settings-gear:hover{background:var(--soft-hover);border-color:var(--btn-bd)}
+.ai-suggestions button{background:var(--soft-bg);border-color:var(--soft-bd);color:var(--soft-fg)}
+.ai-suggestions button:hover{background:var(--soft-hover);border-color:var(--btn-bd)}
+.ai-suggestions button svg{color:var(--accent)}
+.ai-history-item{color:var(--soft-fg)}.ai-history-item.active{background:var(--btn-bg);border-color:var(--btn-bd)}
+
+/* Segmented chips (replace native selects) and payment-method chips */
+.select-hidden{position:absolute!important;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.seg-chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.seg-chip,.wallet-method-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 13px;border:1px solid var(--soft-bd);border-radius:10px;background:var(--soft-bg);color:var(--soft-fg);font:700 12px 'Tajawal',sans-serif;cursor:pointer;transition:background .18s,color .18s,border-color .18s,transform .12s,box-shadow .18s}
+.seg-chip:hover,.wallet-method-btn:hover{background:var(--soft-hover);border-color:var(--btn-bd)}
+.seg-chip.active,.wallet-method-btn.active{color:#fff;background:#535a34;border-color:#535a34;box-shadow:0 4px 12px rgba(83,90,52,.2)}
+html[data-theme="dark"] .seg-chip.active,html[data-theme="dark"] .wallet-method-btn.active{color:#222;background:#e3d8b4;border-color:#e3d8b4;box-shadow:none}
+.wallet-method-chips{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0}
+.wallet-method-btn{flex:1;min-width:140px;min-height:46px;font-size:13px;border-radius:12px}
+.ai-composer-tools .seg-chips{gap:4px}.ai-composer-tools .seg-chip{min-height:30px;padding:4px 10px;font-size:11px;border-radius:8px}
+.wallet-admin-filters{align-items:center;flex-wrap:wrap}
+
+/* Chat: settings become a floating panel instead of expanding the composer */
+.ai-chat-main{position:relative}
+.ai-provider-settings:not([open]){display:none}
+.ai-provider-settings[open]{position:absolute;z-index:8;top:72px;left:14px;right:auto;width:min(410px,calc(100% - 28px));max-height:calc(100% - 96px);overflow:auto;margin:0;padding:16px;border-radius:16px;background:var(--paper);border:1px solid var(--line);box-shadow:0 24px 60px rgba(28,31,21,.22)}
+.ai-provider-settings summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px;font-size:14px}
+.ai-provider-settings summary::-webkit-details-marker{display:none}
+.ai-provider-settings summary::after{content:'×';font-size:22px;line-height:1;color:var(--muted)}
+.ai-provider-settings select.select-hidden{display:block}
+.ai-provider-settings .seg-chips{margin-top:2px}
+.ai-provider-settings .ai-check{flex-direction:row;align-items:flex-start;gap:9px}
+.ai-provider-settings .ai-check input{width:auto;min-height:0;margin-top:3px}
+
+/* Chat: message tools, errors, composer */
+.ai-message-tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.ai-tool-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--soft-bd);border-radius:9px;background:var(--soft-bg);color:var(--soft-fg);font:700 11px 'Tajawal',sans-serif;cursor:pointer}
+.ai-tool-btn:hover{background:var(--soft-hover);border-color:var(--btn-bd)}.ai-tool-btn svg{width:14px;height:14px}
+.ai-message.is-error .ai-message-content{padding:10px 14px;border:1px solid var(--danger-bd);border-radius:12px;background:var(--danger-bg);color:var(--danger-fg)}
+.ai-message.is-error .ai-message-avatar{background:var(--danger-bg);color:var(--danger-fg)}
+.ai-chat-composer>textarea{resize:none;overflow-y:auto}
+.ai-chat-composer:focus-within{border-color:#9aa47e;box-shadow:0 0 0 3px #87945d22}
+@media(max-width:760px){
+  .ai-provider-settings[open]{position:fixed;left:8px;right:8px;top:64px;width:auto;max-height:calc(100dvh - 80px);overflow:auto;z-index:20}
+  .wallet-method-btn{min-width:120px}
+}
+
+/* Chat header: keep close button, settings gear and title from overlapping */
+@media(min-width:761px){.ai-chat-topbar{padding-left:112px}.ai-settings-gear{left:58px}.ai-provider-settings[open]{left:58px}}
+@media(max-width:760px){.ai-chat-topbar{padding-right:58px}}

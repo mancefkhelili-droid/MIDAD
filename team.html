@@ -1,1 +1,156 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f8f7f1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://epislkcmkneyqmonzias.supabase.co; connect-src 'self' https://epislkcmkneyqmonzias.supabase.co https://cdn.jsdelivr.net; base-uri 'self'; object-src 'none'; form-action 'self';"><title>مساحة الفريق | مِداد</title><link rel="stylesheet" href="styles.css?v=55"><link rel="stylesheet" href="team.css?v=1"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://unpkg.com/lucide@latest"></script></head><body class="team-page"><header class="team-top"><a href="./" class="team-brand"><span class="team-mark">م</span><span><b>مِداد</b><small>مساحة الفريق</small></span></a><div class="team-top-actions"><span id="team-user-label"></span><a class="team-back" href="./">العودة إلى Medad</a><button id="team-signout" class="team-ghost" hidden>خروج</button></div></header><main class="team-main"><section class="team-hero"><div><span class="team-kicker">MEDAD COLLECTIVE WORKSPACE</span><h1>مساحة الفريق</h1><p>مساحة جماعية مستقلة للاشتراك والرصيد والمكتبة، مع بقاء حسابات الأعضاء ومحادثاتهم الخاصة منفصلة.</p></div><div class="team-hero-icon"><i data-lucide="users-round"></i></div></section><div id="team-alert" class="team-alert" role="status"></div><section id="team-auth-required" class="team-panel" hidden><h2>سجّل الدخول أولًا</h2><p>ادخل إلى حساب Medad الشخصي، ثم افتح مساحة الفريق من جديد.</p><a class="team-primary" href="./#login">الذهاب إلى تسجيل الدخول</a></section><section id="team-no-team" class="team-grid" hidden><article class="team-panel"><div class="team-panel-icon"><i data-lucide="plus"></i></div><h2>أنشئ مساحة فريق</h2><p>أنت المسؤول عن الدعوات وإدارة الأعضاء والاشتراك الجماعي.</p><form id="team-create-form"><label>اسم الفريق<input id="team-name" maxlength="100" minlength="2" placeholder="مثال: فريق الدراسة" required></label><label>هدف جمع الاشتراك (دج)<input id="team-goal" type="number" min="100" max="10000000" step="50" value="1000" required></label><button class="team-primary" type="submit">إنشاء مساحة الفريق</button></form></article><article class="team-panel"><div class="team-panel-icon"><i data-lucide="key-round"></i></div><h2>انضم إلى فريق</h2><p>أدخل رمز الدعوة الذي شاركه معك مسؤول الفريق.</p><form id="team-join-form"><label>رمز الدعوة<input id="team-code" maxlength="16" placeholder="رمز الدعوة" required></label><button class="team-secondary" type="submit">الانضمام إلى الفريق</button></form></article></section><section id="team-dashboard" hidden><div class="team-stats"><article class="team-stat"><span>الرصيد الجماعي</span><strong id="team-balance">0 دج</strong><small id="team-goal-caption">من هدف الاشتراك</small></article><article class="team-stat"><span>عدد الأعضاء</span><strong id="team-member-count">0</strong><small>حسابات منفصلة</small></article><article class="team-stat"><span>نشاط الذكاء الاصطناعي</span><strong id="team-ai-count">0</strong><small>استخدام هذا الشهر</small></article></div><div class="team-content-grid"><article class="team-panel team-fund-panel"><div class="team-panel-head"><div><span class="team-kicker">TEAM FUND</span><h2>صندوق الاشتراك</h2></div><i data-lucide="wallet"></i></div><p>تُخصم مساهمتك من محفظتك الشخصية وتضاف إلى رصيد الفريق بشكل آمن.</p><div class="team-progress"><span id="team-progress-bar"></span></div><form id="team-contribute-form"><label>مبلغ المساهمة (دج)<input id="team-contribute-amount" type="number" min="50" max="1000000" step="50" value="100" required></label><button class="team-primary" type="submit">المساهمة من محفظتي</button></form><p class="team-muted">لا يمكن للأعضاء رؤية رصيد محفظتك الشخصي أو مشترياتك الخاصة.</p></article><article class="team-panel"><div class="team-panel-head"><div><span class="team-kicker">INVITATIONS</span><h2>الأعضاء والدعوات</h2></div><i data-lucide="user-round-plus"></i></div><div id="team-invite-area"></div><div id="team-members" class="team-members"></div></article></div><article class="team-panel team-library-panel"><div class="team-panel-head"><div><span class="team-kicker">SHARED LIBRARY</span><h2>مكتبة الفريق</h2></div><i data-lucide="library"></i></div><p>ستجد أوراقك المدفوعة في قائمة «أوراقك المدفوعة» أدناه. اختر ورقة واضغط «أضف إلى مكتبة الفريق» لمشاركتها. لا تظهر مشترياتك الخاصة للأعضاء إلا بعد اختيارك لها.</p><div id="team-library" class="team-library-list"><p class="team-muted">جارٍ تحميل مكتبة الفريق…</p></div><div class="team-library-add"><label>أوراقك المدفوعة — اختر الورقة التي تريد مشاركتها مع الفريق<select id="team-document-select"><option value="">تحميل أوراقك المدفوعة…</option></select></label><button id="team-document-add" class="team-secondary" type="button">أضف إلى مكتبة الفريق</button></div></article><article class="team-panel"><div class="team-panel-head"><div><span class="team-kicker">MONTHLY ACTIVITY</span><h2>استهلاك الفريق</h2></div><select id="team-month"><option value="current">هذا الشهر</option><option value="previous">الشهر الماضي</option></select></div><div id="team-report" class="team-report"></div></article></section></main><footer class="team-footer">مِداد — تعاون جماعي، وخصوصية شخصية.</footer><script src="team.js?v=1"></script><script>if(window.lucide)lucide.createIcons();</script></body></html>
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#fbf8f1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://epislkcmkneyqmonzias.supabase.co; connect-src 'self' https://epislkcmkneyqmonzias.supabase.co https://cdn.jsdelivr.net; base-uri 'self'; object-src 'none'; form-action 'self';">
+<title>مساحة الفريق | مِداد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script>
+/* Apply saved theme and language before first paint so the page never flashes the wrong look. */
+try{
+  var th=localStorage.getItem("medad-theme");
+  if(!th)th=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+  document.documentElement.dataset.theme=th;
+  var lg=localStorage.getItem("medad-lang");
+  if(lg==="fr"||lg==="en"){document.documentElement.lang=lg;document.documentElement.dir="ltr"}
+}catch(e){}
+</script>
+<link rel="stylesheet" href="styles.css?v=56">
+<link rel="stylesheet" href="team.css?v=2">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
+<script src="https://unpkg.com/lucide@0.468.0"></script>
+</head>
+<body class="team-page">
+
+<header class="team-top">
+  <a href="./" class="team-brand">
+    <span class="team-mark">م</span>
+    <span><b>مِداد</b><small data-i18n="brandSub">مساحة الفريق</small></span>
+  </a>
+  <div class="team-top-actions">
+    <div class="seg-chips" id="team-lang" role="group" aria-label="Language" dir="ltr"></div>
+    <button class="team-icon-btn" id="team-theme" type="button" data-i18n-title="theme" aria-label="Theme"><i data-lucide="moon"></i></button>
+    <span id="team-user-label" class="team-user-label"></span>
+    <a class="team-btn team-soft" href="./"><i data-lucide="arrow-right" class="flip-rtl"></i><span data-i18n="back">العودة إلى مِداد</span></a>
+    <button id="team-signout" class="team-btn team-soft" type="button" hidden data-i18n="signout">خروج</button>
+  </div>
+</header>
+
+<main class="team-main">
+  <section class="team-hero">
+    <div>
+      <span class="team-kicker">MEDAD COLLECTIVE WORKSPACE</span>
+      <h1 data-i18n="heroTitle">مساحة الفريق</h1>
+      <p data-i18n="heroDesc">مساحة جماعية للاشتراك والرصيد والمكتبة، مع بقاء حساب كل عضو ومحادثاته الخاصة منفصلة.</p>
+    </div>
+    <div class="team-hero-icon"><i data-lucide="users-round"></i></div>
+  </section>
+
+  <div id="team-loading" class="team-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+
+  <section id="team-auth-required" class="team-panel" hidden>
+    <div class="team-panel-icon"><i data-lucide="log-in"></i></div>
+    <h2 data-i18n="authTitle">سجّل الدخول أولًا</h2>
+    <p data-i18n="authDesc">ادخل إلى حسابك الشخصي في مِداد، ثم افتح مساحة الفريق من جديد.</p>
+    <a class="team-btn team-primary" href="./#login" data-i18n="authBtn">الذهاب إلى تسجيل الدخول</a>
+  </section>
+
+  <section id="team-no-team" class="team-grid" hidden>
+    <article class="team-panel">
+      <div class="team-panel-icon"><i data-lucide="plus"></i></div>
+      <h2 data-i18n="createTitle">أنشئ مساحة فريق</h2>
+      <p data-i18n="createDesc">أنت المسؤول عن الدعوات وإدارة الأعضاء والاشتراك الجماعي.</p>
+      <form id="team-create-form">
+        <label><span data-i18n="teamName">اسم الفريق</span><input id="team-name" maxlength="100" minlength="2" required data-i18n-ph="teamNamePh" placeholder="مثال: فريق الدراسة"></label>
+        <label><span data-i18n="goalLabel">هدف جمع الاشتراك (دج)</span><input id="team-goal" type="number" min="100" max="10000000" step="50" value="1000" required inputmode="numeric"></label>
+        <button class="team-btn team-primary" type="submit" data-i18n="createBtn">إنشاء مساحة الفريق</button>
+      </form>
+    </article>
+    <article class="team-panel">
+      <div class="team-panel-icon"><i data-lucide="key-round"></i></div>
+      <h2 data-i18n="joinTitle">انضم إلى فريق</h2>
+      <p data-i18n="joinDesc">أدخل رمز الدعوة الذي شاركه معك مسؤول الفريق.</p>
+      <form id="team-join-form">
+        <label><span data-i18n="inviteCode">رمز الدعوة</span><input id="team-code" maxlength="16" required dir="ltr" autocomplete="off" autocapitalize="characters"></label>
+        <button class="team-btn team-soft" type="submit" data-i18n="joinBtn">الانضمام إلى الفريق</button>
+      </form>
+    </article>
+  </section>
+
+  <section id="team-dashboard" hidden>
+    <div class="team-title-row">
+      <h2 id="team-name-title"></h2>
+      <span class="team-role-badge" id="team-role-badge"></span>
+    </div>
+
+    <div class="team-stats">
+      <article class="team-stat"><span data-i18n="statBalance">الرصيد الجماعي</span><strong id="team-balance">0</strong><small id="team-goal-caption"></small></article>
+      <article class="team-stat"><span data-i18n="statMembers">عدد الأعضاء</span><strong id="team-member-count">0</strong><small data-i18n="statMembersSub">حسابات منفصلة</small></article>
+      <article class="team-stat"><span data-i18n="statAi">نشاط الذكاء الاصطناعي</span><strong id="team-ai-count">0</strong><small data-i18n="statAiSub">استخدام في الفترة المختارة</small></article>
+    </div>
+
+    <div class="team-content-grid">
+      <article class="team-panel">
+        <div class="team-panel-head"><div><span class="team-kicker">TEAM FUND</span><h2 data-i18n="fundTitle">صندوق الاشتراك</h2></div><i data-lucide="wallet"></i></div>
+        <p data-i18n="fundDesc">تُخصم مساهمتك من محفظتك الشخصية وتُضاف إلى رصيد الفريق بشكل آمن.</p>
+        <div class="team-progress-meta"><strong id="team-percent">0%</strong><span id="team-remaining"></span></div>
+        <div class="team-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="team-progress"><span id="team-progress-bar"></span></div>
+        <form id="team-contribute-form">
+          <label><span data-i18n="contributeLabel">مبلغ المساهمة (دج)</span><input id="team-contribute-amount" type="number" min="50" max="1000000" step="50" value="100" required inputmode="numeric"></label>
+          <div class="seg-chips" id="team-quick-amounts"></div>
+          <button class="team-btn team-primary" type="submit" data-i18n="contributeBtn">المساهمة من محفظتي</button>
+        </form>
+        <p class="team-muted" data-i18n="fundPrivacy">لا يمكن للأعضاء رؤية رصيد محفظتك الشخصي أو مشترياتك الخاصة.</p>
+        <div id="team-contribs-wrap" hidden>
+          <h3 class="team-sub" data-i18n="recentTitle">آخر المساهمات</h3>
+          <div id="team-contribs" class="team-list"></div>
+        </div>
+      </article>
+
+      <article class="team-panel">
+        <div class="team-panel-head"><div><span class="team-kicker">INVITATIONS</span><h2 data-i18n="membersTitle">الأعضاء والدعوات</h2></div><i data-lucide="user-round-plus"></i></div>
+        <div id="team-invite-area"></div>
+        <div id="team-members" class="team-list"></div>
+        <button id="team-leave" class="team-mini danger" type="button" data-i18n="leave">مغادرة الفريق</button>
+      </article>
+    </div>
+
+    <article class="team-panel">
+      <div class="team-panel-head"><div><span class="team-kicker">SHARED LIBRARY</span><h2 data-i18n="libTitle">مكتبة الفريق</h2></div><i data-lucide="library"></i></div>
+      <p data-i18n="libDesc">شارك أوراقك المدفوعة مع الفريق. لا تظهر مشترياتك الخاصة للأعضاء إلا بعد اختيارك لها.</p>
+      <div id="team-library" class="team-list"></div>
+      <h3 class="team-sub" data-i18n="libPick">اختر ورقة من أوراقك المدفوعة لمشاركتها</h3>
+      <div id="team-picker" class="team-picker"></div>
+      <button id="team-document-add" class="team-btn team-soft" type="button" data-i18n="libAdd">أضف إلى مكتبة الفريق</button>
+    </article>
+
+    <article class="team-panel">
+      <div class="team-panel-head">
+        <div><span class="team-kicker">MONTHLY ACTIVITY</span><h2 data-i18n="actTitle">استهلاك الفريق</h2></div>
+        <div class="seg-chips" id="team-month-chips" role="group"></div>
+      </div>
+      <div id="team-report" class="team-report"></div>
+    </article>
+  </section>
+</main>
+
+<footer class="team-footer" data-i18n="footer">مِداد — تعاون جماعي، وخصوصية شخصية.</footer>
+<div id="team-toast" class="team-toast" role="status" aria-live="polite"></div>
+
+<dialog id="team-confirm" class="team-confirm">
+  <form method="dialog">
+    <p id="team-confirm-text"></p>
+    <div class="team-confirm-actions">
+      <button class="team-btn team-soft" value="cancel" id="team-confirm-cancel"></button>
+      <button class="team-btn team-primary" value="ok" id="team-confirm-ok"></button>
+    </div>
+  </form>
+</dialog>
+
+<script src="team.js?v=2"></script>
+</body>
+</html>

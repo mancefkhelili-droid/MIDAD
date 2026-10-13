@@ -22,8 +22,11 @@ create table if not exists public.medad_team_contributions (
   user_id uuid not null references auth.users(id) on delete cascade,
   amount numeric(12,2) not null check (amount > 0),
   wallet_balance_after numeric(12,2) not null,
+  request_id uuid,
   created_at timestamptz not null default now()
 );
+alter table public.medad_team_contributions add column if not exists request_id uuid;
+create unique index if not exists medad_team_contrib_request_uidx on public.medad_team_contributions(user_id, request_id) where request_id is not null;
 create index if not exists medad_team_contrib_team_created_idx on public.medad_team_contributions(team_id, created_at desc);
 alter table public.medad_team_contributions enable row level security;
 drop policy if exists "team members read contributions" on public.medad_team_contributions;
@@ -39,7 +42,7 @@ language sql security definer set search_path = public, auth as $$
 $$;
 
 -- New overload lets the owner set a fundraising target; everyone can invite immediately.
-create or replace function public.medad_team_create(p_name text, p_goal numeric default 1000) returns jsonb
+create or replace function public.medad_team_create(p_name text, p_goal numeric) returns jsonb
 language plpgsql security definer set search_path = public, auth as $$
 declare v_team public.medad_teams; v_name text := trim(coalesce(p_name, '')); v_goal numeric := coalesce(p_goal,1000);
 begin
@@ -96,23 +99,48 @@ begin
 end $$;
 
 -- Contribution is atomic: lock personal wallet, debit it, credit team fund, write ledger/history.
-create or replace function public.medad_team_contribute(p_amount numeric) returns jsonb
+-- p_request_id makes a double-click / retry safe: the same request id never debits twice.
+drop function if exists public.medad_team_contribute(numeric,uuid), public.medad_team_contributions_list(int);
+create or replace function public.medad_team_contribute(p_amount numeric, p_request_id uuid default null) returns jsonb
 language plpgsql security definer set search_path = public, auth as $$
-declare v_team public.medad_teams; v_balance numeric; v_after numeric; v_amount numeric := round(coalesce(p_amount,0),2);
+declare v_team public.medad_teams; v_balance numeric; v_after numeric; v_amount numeric := round(coalesce(p_amount,0),2); v_prev public.medad_team_contributions;
 begin
  if auth.uid() is null then raise exception 'auth_required'; end if;
  if v_amount < 50 or v_amount > 1000000 then raise exception 'bad_contribution'; end if;
  select t.* into v_team from public.medad_teams t join public.medad_team_members m on m.team_id=t.id where m.user_id=auth.uid() limit 1 for update of t;
  if v_team.id is null then raise exception 'not_in_team'; end if;
+ if p_request_id is not null then
+   select * into v_prev from public.medad_team_contributions where user_id=auth.uid() and request_id=p_request_id;
+   if found then
+     return jsonb_build_object('ok',true,'duplicate',true,'team_balance',v_team.shared_balance,'goal',v_team.subscription_goal,'wallet_balance',v_prev.wallet_balance_after);
+   end if;
+ end if;
  select balance into v_balance from public.wallets where user_id=auth.uid() for update;
  if not found or v_balance < v_amount then raise exception 'insufficient_wallet'; end if;
  update public.wallets set balance=balance-v_amount, updated_at=now() where user_id=auth.uid() returning balance into v_after;
  update public.medad_teams set shared_balance=shared_balance+v_amount where id=v_team.id returning * into v_team;
  insert into public.wallet_ledger(user_id,kind,amount,balance_after,ref_type,ref_id,description)
  values(auth.uid(),'team_contribution',-v_amount,v_after,'team',v_team.id,'مساهمة في صندوق الفريق: '||v_team.name);
- insert into public.medad_team_contributions(team_id,user_id,amount,wallet_balance_after) values(v_team.id,auth.uid(),v_amount,v_after);
+ insert into public.medad_team_contributions(team_id,user_id,amount,wallet_balance_after,request_id) values(v_team.id,auth.uid(),v_amount,v_after,p_request_id);
  return jsonb_build_object('ok',true,'team_balance',v_team.shared_balance,'goal',v_team.subscription_goal,'wallet_balance',v_after);
 end $$;
 
-revoke all on function public.medad_team_create(text), public.medad_team_create(text,numeric), public.medad_team_join(text), public.medad_team_regenerate_code(), public.medad_team_summary(date), public.medad_team_contribute(numeric) from public, anon;
-grant execute on function public.medad_team_create(text), public.medad_team_create(text,numeric), public.medad_team_join(text), public.medad_team_regenerate_code(), public.medad_team_summary(date), public.medad_team_contribute(numeric) to authenticated;
+-- Recent contributions for the team page (members only; shows names, never wallet balances).
+create or replace function public.medad_team_contributions_list(p_limit int default 20) returns jsonb
+language plpgsql stable security definer set search_path = public, auth as $$
+declare v_team uuid;
+begin
+ if auth.uid() is null then raise exception 'auth_required'; end if;
+ select team_id into v_team from public.medad_team_members where user_id=auth.uid() limit 1;
+ if v_team is null then return '[]'::jsonb; end if;
+ return coalesce((select jsonb_agg(r order by r.created_at desc) from (
+   select c.amount, c.created_at, coalesce(nullif(p.full_name,''),split_part(u.email,'@',1)) as member_name
+   from public.medad_team_contributions c
+   join auth.users u on u.id=c.user_id
+   left join public.user_document_profiles p on p.user_id=c.user_id
+   where c.team_id=v_team order by c.created_at desc limit least(greatest(coalesce(p_limit,20),1),100)
+ ) r),'[]'::jsonb);
+end $$;
+
+revoke all on function public.medad_team_create(text), public.medad_team_create(text,numeric), public.medad_team_join(text), public.medad_team_regenerate_code(), public.medad_team_summary(date), public.medad_team_contribute(numeric,uuid), public.medad_team_contributions_list(int) from public, anon;
+grant execute on function public.medad_team_create(text), public.medad_team_create(text,numeric), public.medad_team_join(text), public.medad_team_regenerate_code(), public.medad_team_summary(date), public.medad_team_contribute(numeric,uuid), public.medad_team_contributions_list(int) to authenticated;

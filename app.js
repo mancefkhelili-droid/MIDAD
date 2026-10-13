@@ -3301,6 +3301,15 @@ const WALLET_ERRORS = {
 };
 let walletSettingsCache = null;
 function walletMsg(error) { return rpcMsg(error, WALLET_ERRORS); }
+function walletLedgerLabel(x) {
+  const i = curLang() === 'fr' ? 1 : curLang() === 'en' ? 2 : 0;
+  const K = { topup: ['شحن المحفظة', 'Recharge du portefeuille', 'Wallet top-up'], purchase: ['شراء', 'Achat', 'Purchase'], refund: ['استرداد', 'Remboursement', 'Refund'], adjustment: ['تسوية', 'Ajustement', 'Adjustment'], team_contribution: ['مساهمة في صندوق الفريق', 'Contribution au fonds d’équipe', 'Team fund contribution'] };
+  const raw = String(x?.description || '').trim();
+  const m = raw.match(/^مساهمة في صندوق الفريق:\s*(.*)$/);
+  if (m) return K.team_contribution[i] + (m[1] ? ': ' + m[1] : '');
+  if (raw) return t(raw);
+  return (K[x?.kind] || [])[i] || t('عملية محفظة');
+}
 function walletMoney(value) { return `${Number(value || 0).toLocaleString('fr-DZ')} دج`; }
 function setWalletFeedback(message, type = '') {
   const el = $('#wallet-feedback'); if (!el) return;
@@ -3326,7 +3335,9 @@ async function loadWalletSettings() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'wallet-method-btn';
-      if (idx === 0) btn.classList.add('active');
+      const isActive = hiddenInput.value ? hiddenInput.value === m.code : idx === 0;
+      if (isActive) btn.classList.add('active');
+      btn.setAttribute('aria-pressed', String(isActive));
       btn.textContent = (m.code === 'ccp' || m.code === 'baridimob') ? (window.MedadI18n?.tr?.(m.code === 'ccp' ? 'الدفع عبر CCP' : 'الدفع عبر بريدي موب') || walletMethodLabel(m.code)) : (m.label || walletMethodLabel(m.code));
       btn.dataset.code = m.code;
       btn.dataset.min = String(Number(m.min || data.min_topup || 500));
@@ -3334,6 +3345,7 @@ async function loadWalletSettings() {
         e.preventDefault();
         document.querySelectorAll('.wallet-method-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        document.querySelectorAll('.wallet-method-btn').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
         hiddenInput.value = m.code;
         const updateMin = () => {
           $('#wallet-amount').min = String(Math.max(500, Number(btn.dataset.min || data.min_topup || 500)));
@@ -3344,7 +3356,7 @@ async function loadWalletSettings() {
       };
       chipsContainer.append(btn);
     });
-    if (hiddenInput.value === '') {
+    if (hiddenInput.value === '' || !methods.some((m) => m.code === hiddenInput.value)) {
       hiddenInput.value = methods[0].code;
       const firstBtn = chipsContainer.querySelector('.wallet-method-btn');
       if (firstBtn) {
@@ -3381,7 +3393,7 @@ async function loadWalletData() {
     else ledger.replaceChildren(...ledgerRes.data.map((x) => {
       const row = document.createElement('article'); row.className = 'order-item';
       const top = document.createElement('div'); top.className = 'order-item-top';
-      const title = document.createElement('span'); title.textContent = x.description || ({topup:'شحن المحفظة',purchase:'شراء',refund:'استرداد',adjustment:'تسوية'}[x.kind] || 'عملية محفظة');
+      const title = document.createElement('span'); title.textContent = walletLedgerLabel(x);
       const amount = document.createElement('strong'); amount.className = Number(x.amount) < 0 ? 'wallet-negative' : 'wallet-positive'; amount.textContent = `${Number(x.amount) > 0 ? '+' : ''}${walletMoney(x.amount)}`;
       top.append(title, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • ${t('الرصيد بعد العملية:')} ${walletMoney(x.balance_after)}`; row.append(top, small); return row;
     }));
@@ -3563,7 +3575,7 @@ async function loadAdminWalletLedger() {
   const { data, error } = await supabase.rpc('admin_wallet_ledger', { p_limit: 100 });
   if (error || !Array.isArray(data)) { box.textContent = t('تعذر تحميل الحركات المالية.'); return; }
   if (!data.length) { box.textContent = t('لا توجد حركات مالية بعد.'); return; }
-  box.replaceChildren(...data.map((x) => { const row = document.createElement('article'); row.className = 'order-item'; const top = document.createElement('div'); top.className = 'order-item-top'; const desc = document.createElement('span'); desc.textContent = `${x.email || t('مستخدم')} • ${t(x.description || x.kind)}`; const amount = document.createElement('strong'); amount.textContent = walletMoney(x.amount); top.append(desc, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • ${t('الرصيد بعد العملية:')} ${walletMoney(x.balance_after)}`; row.append(top, small); return row; }));
+  box.replaceChildren(...data.map((x) => { const row = document.createElement('article'); row.className = 'order-item'; const top = document.createElement('div'); top.className = 'order-item-top'; const desc = document.createElement('span'); desc.textContent = `${x.email || t('مستخدم')} • ${walletLedgerLabel(x)}`; const amount = document.createElement('strong'); amount.textContent = walletMoney(x.amount); top.append(desc, amount); const small = document.createElement('small'); small.textContent = `${new Date(x.created_at).toLocaleString(window.__locale || 'ar-DZ')} • ${t('الرصيد بعد العملية:')} ${walletMoney(x.balance_after)}`; row.append(top, small); return row; }));
 }
 window.addEventListener('medad-lang', () => { if ($('#admin-wallet-dialog')?.open) { loadAdminWalletSettings(); loadAdminWalletTopups(); loadAdminWalletLedger(); } if ($('#wallet-dialog')?.open) { loadWalletSettings(); loadWalletData(); } });
 $('#aws-status')?.addEventListener('change', loadAdminWalletTopups);
@@ -3646,14 +3658,30 @@ let aiChatBusy = false;
 function aiChatText(key, fallback) { const v=ft(key); return !v || v===key ? fallback : v; }
 function aiEsc(value) { return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function aiRenderMessage(message, index) {
-  const row=document.createElement('article'); row.className='ai-message '+(message.role==='user'?'is-user':'is-assistant');
+  const row=document.createElement('article'); row.className='ai-message '+(message.role==='user'?'is-user':'is-assistant')+(message.error?' is-error':'');
   const avatar=document.createElement('div'); avatar.className='ai-message-avatar'; avatar.innerHTML=message.role==='user'?'<i data-lucide="user-round"></i>':'<i data-lucide="sparkles"></i>';
   const body=document.createElement('div'); body.className='ai-message-body';
   const label=document.createElement('div'); label.className='ai-message-label'; label.textContent=message.role==='user'?aiChatText('aiYou','أنت'):'Medad AI'; body.append(label);
   const content=document.createElement('div'); content.className='ai-message-content';
   if(message.role==='assistant' && message.html){ content.append(sanitizeAiHtml(message.html)); const actions=document.createElement('div');actions.className='ai-message-actions';const edit=document.createElement('button');edit.type='button';edit.className='secondary-button';edit.innerHTML='<i data-lucide="file-pen-line"></i> '+aiEsc(aiChatText('aiOpenDraft','فتح المسودة في المحرر'));edit.addEventListener('click',()=>{const target=$('#document-content');if(!target)return;target.replaceChildren(sanitizeAiHtml(message.html));$('#ai-dialog')?.close();document.body.classList.remove('landing-on');$('#workspace')?.scrollIntoView({behavior:'smooth',block:'start'});showToast(ft('generated'),'success')});actions.append(edit);content.append(actions); }
   else content.textContent=message.content||'';
-  body.append(content); row.append(avatar,body); return row;
+  body.append(content);
+  if(message.role==='assistant'){
+    const bar=document.createElement('div');bar.className='ai-message-tools';
+    const copy=document.createElement('button');copy.type='button';copy.className='ai-tool-btn';copy.innerHTML='<i data-lucide="copy"></i><span></span>';copy.querySelector('span').textContent=L3('نسخ','Copier','Copy');
+    copy.addEventListener('click',()=>{let txt=message.content||'';if(message.html){const tmp=document.createElement('div');tmp.append(sanitizeAiHtml(message.html));txt=tmp.textContent||txt}navigator.clipboard?.writeText(txt.trim()).then(()=>showToast(L3('تم النسخ.','Copié.','Copied.'),'success')).catch(()=>{})});
+    bar.append(copy);
+    if(message.error){const retry=document.createElement('button');retry.type='button';retry.className='ai-tool-btn';retry.innerHTML='<i data-lucide="rotate-ccw"></i><span></span>';retry.querySelector('span').textContent=L3('إعادة المحاولة','Réessayer','Try again');retry.addEventListener('click',aiRetryLast);bar.append(retry)}
+    body.append(bar);
+  }
+  row.append(avatar,body); return row;
+}
+function aiRetryLast() {
+  if (aiChatBusy) return;
+  while (activeAiMessages.length && activeAiMessages[activeAiMessages.length - 1].error) activeAiMessages.pop();
+  const last = activeAiMessages[activeAiMessages.length - 1];
+  if (!last || last.role !== 'user') return;
+  activeAiMessages.pop(); $('#ai-prompt').value = last.content || ''; aiRenderConversation(); $('#ai-form')?.requestSubmit();
 }
 function aiRenderConversation() {
   const box=$('#ai-chat-messages'); if(!box)return; box.replaceChildren();
@@ -3686,8 +3714,8 @@ async function aiLoadChat(id){if(!supabase||!currentUser)return;const {data,erro
 async function aiSaveChat() {
  if(!supabase||!currentUser)return false;
  const title=(activeAiMessages.find(m=>m.role==='user')?.content||aiChatText('aiNewChat','محادثة جديدة')).replace(/\s+/g,' ').slice(0,70)||aiChatText('aiNewChat','محادثة جديدة');
- if(!activeAiChatId){const {data,error}=await supabase.from('medad_ai_chats').insert({user_id:currentUser.id,title,messages:activeAiMessages}).select('id').single();if(error){console.error('AI chat save failed',error);return false}activeAiChatId=data.id}
- else {const {error}=await supabase.from('medad_ai_chats').update({title,messages:activeAiMessages,updated_at:new Date().toISOString()}).eq('id',activeAiChatId).eq('user_id',currentUser.id);if(error){console.error('AI chat update failed',error);return false}}
+ if(!activeAiChatId){const {data,error}=await supabase.from('medad_ai_chats').insert({user_id:currentUser.id,title,messages:activeAiMessages.filter(m=>!m.error)}).select('id').single();if(error){console.error('AI chat save failed',error);return false}activeAiChatId=data.id}
+ else {const {error}=await supabase.from('medad_ai_chats').update({title,messages:activeAiMessages.filter(m=>!m.error),updated_at:new Date().toISOString()}).eq('id',activeAiChatId).eq('user_id',currentUser.id);if(error){console.error('AI chat update failed',error);return false}}
  await aiLoadHistory();return true;
 }
 function aiSetBusy(busy){aiChatBusy=busy;const btn=$('#ai-generate');if(btn){btn.disabled=busy;btn.innerHTML=busy?'<span class="ai-spinner"></span><span>'+aiEsc(aiChatText('generating','يفكر…'))+'</span>':'<i data-lucide="arrow-up"></i><span>'+aiEsc(aiChatText('aiSend','إرسال'))+'</span>'}$('#ai-prompt')?.toggleAttribute('disabled',busy);window.lucide?.createIcons()}
@@ -3702,15 +3730,15 @@ $('#ai-form')?.addEventListener('submit', async (e) => {
  if(!apiKey){$('#ai-provider-settings')?.setAttribute('open','');if(fb){fb.textContent=aiChatText('aiNeedKey','أدخل مفتاح API من الإعدادات للبدء.');fb.className='auth-feedback error'}return}
  const apiBase=($('#ai-api-base')?.value||'https://api.openai.com/v1').trim();if(!/^https:\/\//i.test(apiBase)||apiBase.length>300){if(fb)fb.textContent=ft('error');return}
  try{if($('#ai-remember-key')?.checked)localStorage.setItem('medad-ai-user-api-key',apiKey);else localStorage.removeItem('medad-ai-user-api-key')}catch(_){}
- const userMessage={role:'user',content:prompt||(file?aiChatText('aiAnalyzeAttachment','حلّل الملف المرفق وساعدني في تحويله إلى وثيقة قابلة للتعديل.'):'')};activeAiMessages.push(userMessage);aiRenderConversation();$('#ai-prompt').value='';$('#ai-file').value='';$('#ai-chat-attachment')?.replaceChildren();
+ activeAiMessages=activeAiMessages.filter(m=>!m.error);const userMessage={role:'user',content:prompt||(file?aiChatText('aiAnalyzeAttachment','حلّل الملف المرفق وساعدني في تحويله إلى وثيقة قابلة للتعديل.'):'')};activeAiMessages.push(userMessage);aiRenderConversation();$('#ai-prompt').value='';$('#ai-prompt').style.height='';$('#ai-file').value='';$('#ai-chat-attachment')?.replaceChildren();
  const pending=document.createElement('article');pending.className='ai-message is-assistant ai-thinking';pending.innerHTML='<div class="ai-message-avatar"><i data-lucide="sparkles"></i></div><div class="ai-message-body"><div class="ai-message-label">Medad AI</div><div class="ai-message-content"><span class="ai-typing"><i></i><i></i><i></i></span> '+aiEsc(aiChatText('aiThinking','يحضّر إجابتك…'))+'</div></div>';$('#ai-chat-messages')?.append(pending);$('#ai-chat-messages').scrollTop=$('#ai-chat-messages').scrollHeight;aiSetBusy(true);
  try{
   const attachment=file?{name:file.name,type:file.type,data_url:await fileToDataUrl(file)}:null;
   let profileBody={};if($('#ai-send-profile')?.checked){const p=await getDocumentProfile();profileBody={full_name:p.full_name||'',birth_date:p.birth_date||'',address:p.address||'',phone:p.phone||'',organization:p.organization||'',job_title:p.job_title||''}}
-  const prior=activeAiMessages.slice(0,-1).slice(-10).map(m=>{const text=m.role==='assistant'?(m.html||m.content||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1800):(m.content||'').slice(0,1200);return (m.role==='assistant'?'Medad AI':'User')+': '+text}).join('\n\n');const contextualPrompt=(prior?'Conversation so far (use this as context; answer the latest user message):\n'+prior+'\n\nLatest user message:\n':'')+userMessage.content;const {data,error}=await supabase.functions.invoke('medad-ai-document',{body:{prompt:contextualPrompt.slice(-5800),kind:$('#ai-kind').value,language:$('#ai-language').value,consent:true,attachment,profile:profileBody,api_key:apiKey,api_base:apiBase,api_style:$('#ai-api-style')?.value||'responses',model:($('#ai-model')?.value||'gpt-4.1-mini').trim()}});
+  const prior=activeAiMessages.filter(m=>!m.error).slice(0,-1).slice(-10).map(m=>{const text=m.role==='assistant'?(m.html||m.content||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1800):(m.content||'').slice(0,1200);return (m.role==='assistant'?'Medad AI':'User')+': '+text}).join('\n\n');const contextualPrompt=(prior?'Conversation so far (use this as context; answer the latest user message):\n'+prior+'\n\nLatest user message:\n':'')+userMessage.content;const {data,error}=await supabase.functions.invoke('medad-ai-document',{body:{prompt:contextualPrompt.slice(-5800),kind:$('#ai-kind').value,language:$('#ai-language').value,consent:true,attachment,profile:profileBody,api_key:apiKey,api_base:apiBase,api_style:$('#ai-api-style')?.value||'responses',model:($('#ai-model')?.value||'gpt-4.1-mini').trim()}});
   pending.remove();if(error){const code=await aiInvokeErrorCode(error),key='ai_'+code;const msg=ft(key);throw new Error(msg===key?ft('error'):msg)}if(!data?.html)throw new Error(ft('error'));
   activeAiMessages.push({role:'assistant',html:data.html,content:aiChatText('aiDraftReady','أنشأت لك مسودة قابلة للتعديل. يمكنك طلب التعديل عليها برسالة جديدة.')});aiRenderConversation();const saved=await aiSaveChat();if(!saved&&fb){fb.textContent=aiChatText('aiHistorySaveWarning','تم إنشاء الرد، لكن تعذّر حفظ سجل المحادثة.');fb.className='auth-feedback error'}
- }catch(err){pending.remove();const message=String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message});aiRenderConversation();await aiSaveChat();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
+ }catch(err){pending.remove();const message=String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message,error:true});aiRenderConversation();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
 });
 $('#ai-new-chat')?.addEventListener('click',()=>{activeAiChatId=null;activeAiMessages=[];aiRenderConversation();$('#ai-prompt')?.focus();aiLoadHistory()});
 $('#ai-settings-toggle')?.addEventListener('click',()=>{const d=$('#ai-provider-settings');if(d){d.open=!d.open;if(d.open){setTimeout(()=>{d.scrollIntoView({behavior:'smooth',block:'start'});},80)}else{$('#ai-dialog')?.scrollTo({top:0,behavior:'smooth'})}}});
@@ -3718,11 +3746,6 @@ $('#ai-file')?.addEventListener('change',()=>{const file=$('#ai-file').files?.[0
 document.querySelectorAll('[data-ai-suggestion]').forEach(b=>b.addEventListener('click',()=>{$('#ai-prompt').value=b.dataset.aiSuggestion||'';$('#ai-prompt').focus()}));
 $('#ai-prompt')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#ai-form')?.requestSubmit()}});
 $('#ai-open')?.addEventListener('click',()=>{try{const k=localStorage.getItem('medad-ai-user-api-key');if(k){$('#ai-api-key').value=k;$('#ai-remember-key').checked=true}}catch(_){};if($('#ai-chat-history'))aiLoadHistory();openFeatureDialog('#ai-dialog');aiRenderConversation()});
-$('#ai-api-style')?.addEventListener('change',()=>{const style=$('#ai-api-style').value,base=$('#ai-api-base'),model=$('#ai-model');const presets={responses:['https://api.openai.com/v1','gpt-4.1-mini'],chat_completions:['https://openrouter.ai/api/v1','openai/gpt-4.1-mini'],anthropic:['https://api.anthropic.com/v1','claude-sonnet-4-20250514'],gemini:['https://generativelanguage.googleapis.com/v1beta','gemini-2.5-flash']};if(base&&model){const [b,m]=presets[style]||presets.responses;base.value=b;model.value=m;base.dataset.userEdited='';model.dataset.userEdited=''}});
-$('#ai-api-base')?.addEventListener('input',()=>$('#ai-api-base').dataset.userEdited='1');$('#ai-model')?.addEventListener('input',()=>$('#ai-model').dataset.userEdited='1');
-$('#ai-use-profile')?.addEventListener('click',async()=>applyProfileToEditable($('#ai-result'),await getDocumentProfile()));
-$('#ai-open-editor')?.addEventListener('click',()=>{const content=$('#document-content');if(!content){showToast(ft('error'),'error');return}content.replaceChildren(sanitizeAiHtml($('#ai-result').innerHTML));$('#ai-dialog')?.close();document.body.classList.remove('landing-on');$('#workspace')?.scrollIntoView({behavior:'smooth',block:'start'});showToast(ft('generated'),'success')});
-$('#ai-print')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w){showToast('Allow pop-ups to print','error');return}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Medad</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.8;padding:24px;color:#20231b}h1,h2{color:#485331}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd2bc;padding:8px}</style></head><body>'+$('#ai-result').innerHTML+'</body></html>');w.document.close();w.focus();w.print()});
 $('#ai-use-profile')?.addEventListener('click',async()=>applyProfileToEditable($('#ai-result'),await getDocumentProfile()));
 $('#ai-open-editor')?.addEventListener('click',()=>{const content=$('#document-content');if(!content){showToast(ft('error'),'error');return}content.replaceChildren(sanitizeAiHtml($('#ai-result').innerHTML));$('#ai-dialog')?.close();document.body.classList.remove('landing-on');$('#workspace')?.scrollIntoView({behavior:'smooth',block:'start'});showToast(ft('generated'),'success')});
 $('#ai-print')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w){showToast('Allow pop-ups to print','error');return}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Medad</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.8;padding:24px;color:#20231b}h1,h2{color:#485331}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd2bc;padding:8px}</style></head><body>'+$('#ai-result').innerHTML+'</body></html>');w.document.close();w.focus();w.print()});
@@ -3812,3 +3835,28 @@ $('#team-join-form')?.addEventListener('submit', async (e) => {
   await loadTeamWorkspace();
 });
 window.addEventListener('medad-lang',translateFeatureDialogs);translateFeatureDialogs();
+
+// ---------- Unified look: native <select> controls become theme chips; chat textarea grows with its text ----------
+function enhanceSelectChips(select) {
+  if (!select || select.dataset.chips) return;
+  select.dataset.chips = '1';
+  const wrap = document.createElement('div');
+  wrap.className = 'seg-chips'; wrap.setAttribute('role', 'group');
+  if (select.getAttribute('aria-label')) wrap.setAttribute('aria-label', select.getAttribute('aria-label'));
+  select.classList.add('select-hidden'); select.tabIndex = -1; select.setAttribute('aria-hidden', 'true');
+  select.after(wrap);
+  const sync = () => {
+    wrap.replaceChildren();
+    [...select.options].forEach((o) => {
+      const on = o.value === select.value;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'seg-chip' + (on ? ' active' : ''); b.textContent = o.textContent; b.setAttribute('aria-pressed', String(on));
+      b.addEventListener('click', () => { if (select.value === o.value) return; select.value = o.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); });
+      wrap.append(b);
+    });
+  };
+  new MutationObserver(sync).observe(select, { childList: true, subtree: true, characterData: true });
+  select.addEventListener('change', sync);
+  sync();
+}
+['#ai-kind', '#ai-language', '#ai-api-style', '#aws-status', '#team-month'].forEach((sel) => enhanceSelectChips($(sel)));
+$('#ai-prompt')?.addEventListener('input', () => { const p = $('#ai-prompt'); p.style.height = 'auto'; p.style.height = Math.min(p.scrollHeight, 180) + 'px'; });
