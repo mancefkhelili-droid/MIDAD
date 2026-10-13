@@ -20,12 +20,12 @@
       fundTitle: 'صندوق الاشتراك', fundDesc: 'تُخصم مساهمتك من محفظتك الشخصية وتُضاف إلى رصيد الفريق بشكل آمن.', contributeLabel: 'مبلغ المساهمة (دج)', contributeBtn: 'المساهمة من محفظتي',
       fundPrivacy: 'لا يمكن للأعضاء رؤية رصيد محفظتك الشخصي أو مشترياتك الخاصة.', fundReached: 'تم بلوغ هدف الاشتراك', fundRemaining: 'المتبقي للهدف: {amount}', percentOf: '{p}%',
       recentTitle: 'آخر المساهمات',
-      membersTitle: 'الأعضاء والدعوات', roleOwner: 'مسؤول الفريق', roleMember: 'عضو', uses: '{n} استخدام', copyCode: 'نسخ الرمز', copyLink: 'نسخ رابط الدعوة', regen: 'تغيير الرمز', inviteShared: 'رمز الدعوة يشاركه مسؤول الفريق.', remove: 'إزالة', leave: 'مغادرة الفريق', you: 'أنت',
+      membersTitle: 'الأعضاء والدعوات', roleOwner: 'مسؤول الفريق', roleMember: 'عضو', uses: '{n} استخدام', contributedAmt: 'ساهم بـ {amount}', copyCode: 'نسخ الرمز', copyLink: 'نسخ رابط الدعوة', regen: 'تغيير الرمز', inviteShared: 'رمز الدعوة يشاركه مسؤول الفريق.', remove: 'إزالة', leave: 'مغادرة الفريق', you: 'أنت',
       libTitle: 'مكتبة الفريق', libDesc: 'شارك أوراقك المدفوعة مع الفريق. لا تظهر مشترياتك الخاصة للأعضاء إلا بعد اختيارك لها.', libEmpty: 'المكتبة المشتركة فارغة بعد.', libPick: 'اختر ورقة من أوراقك المدفوعة لمشاركتها', libAdd: 'أضف إلى مكتبة الفريق', libLoading: 'جارٍ تحميل أوراقك…', libNoPurchases: 'لا توجد أوراق مدفوعة متاحة للمشاركة بعد.', libPickFirst: 'اختر ورقة من القائمة أولًا.', libDoc: 'وثيقة', libLoadErr: 'تعذّر تحميل المكتبة المشتركة.', purchasesErr: 'تعذّر تحميل مشترياتك.',
       actTitle: 'استهلاك الفريق', monthCurrent: 'هذا الشهر', monthPrev: 'الشهر الماضي', colMember: 'العضو', colUses: 'استخدامات الذكاء الاصطناعي', colUnits: 'الوحدات', actEmpty: 'لا يوجد استهلاك في هذه الفترة.',
       confirmOk: 'تأكيد', confirmCancel: 'إلغاء', confirmRegen: 'تغيير الرمز الحالي؟ سيتوقف الرمز القديم عن العمل.', confirmRemove: 'إزالة هذا العضو من الفريق؟', confirmLeave: 'هل تريد مغادرة الفريق؟', confirmRemoveDoc: 'إزالة الوثيقة من مكتبة الفريق؟',
       tCopied: 'تم النسخ.', tCopyFail: 'تعذّر النسخ؛ انسخ الرمز يدويًا.', tCodeNew: 'تم تحديث رمز الدعوة.', tCreated: 'تم إنشاء مساحة الفريق.', tJoined: 'انضممت إلى الفريق بنجاح.', tContributed: 'تمت المساهمة من محفظتك الشخصية.', tLeft: 'غادرت الفريق.', tDocAdded: 'تمت إضافة الورقة إلى مكتبة الفريق.',
-      e_generic: 'تعذّر تنفيذ العملية.', e_secure: 'تعذّر تحميل الاتصال الآمن.', e_auth_required: 'سجّل الدخول أولًا.', e_already_in_team: 'أنت عضو في فريق بالفعل.', e_invalid_invite_code: 'رمز الدعوة غير صحيح.', e_team_full: 'الفريق ممتلئ.', e_insufficient_wallet: 'رصيد محفظتك لا يكفي لهذه المساهمة.', e_not_in_team: 'لا تنتمي إلى فريق.', e_not_owner: 'هذا الإجراء للمسؤول فقط.', e_bad_name: 'اسم الفريق يجب أن يكون بين حرفين و100 حرف.', e_bad_goal: 'هدف الجمع يجب أن يكون بين 100 و10,000,000.', e_bad_contribution: 'المساهمة يجب أن تكون بين 50 و1,000,000.', e_too_many_attempts: 'محاولات كثيرة. أعد المحاولة لاحقًا.',
+      e_generic: 'تعذّر تنفيذ العملية.', e_secure: 'تعذّر تحميل الاتصال الآمن.', e_auth_required: 'سجّل الدخول أولًا.', e_already_in_team: 'أنت عضو في فريق بالفعل.', e_invalid_invite_code: 'رمز الدعوة غير صحيح.', e_team_full: 'الفريق ممتلئ.', e_insufficient_wallet: 'رصيد محفظتك لا يكفي لهذه المساهمة.', e_insufficient_funds: 'رصيد محفظتك لا يكفي لهذه المساهمة.', e_bad_amount: 'المساهمة يجب أن تكون بين 50 و1,000,000.', e_owner_has_members: 'لا يمكنك مغادرة الفريق وفيه أعضاء آخرون. أزِلهم أولًا.', e_team_has_balance: 'لا يمكن حذف فريق يحتوي على رصيد جماعي.', e_forbidden: 'غير مسموح بهذا الإجراء.', e_not_in_team: 'لا تنتمي إلى فريق.', e_not_owner: 'هذا الإجراء للمسؤول فقط.', e_bad_name: 'اسم الفريق يجب أن يكون بين حرفين و100 حرف.', e_bad_goal: 'هدف الجمع يجب أن يكون بين 100 و10,000,000.', e_bad_contribution: 'المساهمة يجب أن تكون بين 50 و1,000,000.', e_too_many_attempts: 'محاولات كثيرة. أعد المحاولة لاحقًا.',
       footer: 'مِداد — تعاون جماعي، وخصوصية شخصية.'
     },
     fr: {
@@ -38,12 +38,12 @@
       fundTitle: 'Fonds d’abonnement', fundDesc: 'Votre contribution est débitée de votre portefeuille personnel et ajoutée au solde de l’équipe en toute sécurité.', contributeLabel: 'Montant de la contribution (DA)', contributeBtn: 'Contribuer depuis mon portefeuille',
       fundPrivacy: 'Les membres ne voient ni le solde de votre portefeuille ni vos achats privés.', fundReached: 'Objectif d’abonnement atteint', fundRemaining: 'Reste à collecter : {amount}', percentOf: '{p} %',
       recentTitle: 'Dernières contributions',
-      membersTitle: 'Membres et invitations', roleOwner: 'Responsable', roleMember: 'Membre', uses: '{n} utilisation(s)', copyCode: 'Copier le code', copyLink: 'Copier le lien d’invitation', regen: 'Changer le code', inviteShared: 'Le code d’invitation est partagé par le responsable de l’équipe.', remove: 'Retirer', leave: 'Quitter l’équipe', you: 'Vous',
+      membersTitle: 'Membres et invitations', roleOwner: 'Responsable', roleMember: 'Membre', uses: '{n} utilisation(s)', contributedAmt: 'a contribué {amount}', copyCode: 'Copier le code', copyLink: 'Copier le lien d’invitation', regen: 'Changer le code', inviteShared: 'Le code d’invitation est partagé par le responsable de l’équipe.', remove: 'Retirer', leave: 'Quitter l’équipe', you: 'Vous',
       libTitle: 'Bibliothèque de l’équipe', libDesc: 'Partagez vos documents payés avec l’équipe. Vos achats privés ne sont visibles que si vous les choisissez.', libEmpty: 'La bibliothèque partagée est encore vide.', libPick: 'Choisissez un document payé à partager', libAdd: 'Ajouter à la bibliothèque', libLoading: 'Chargement de vos documents…', libNoPurchases: 'Aucun document payé disponible pour le partage.', libPickFirst: 'Choisissez d’abord un document dans la liste.', libDoc: 'Document', libLoadErr: 'Impossible de charger la bibliothèque partagée.', purchasesErr: 'Impossible de charger vos achats.',
       actTitle: 'Consommation de l’équipe', monthCurrent: 'Ce mois-ci', monthPrev: 'Mois dernier', colMember: 'Membre', colUses: 'Utilisations IA', colUnits: 'Unités', actEmpty: 'Aucune consommation sur cette période.',
       confirmOk: 'Confirmer', confirmCancel: 'Annuler', confirmRegen: 'Changer le code actuel ? L’ancien code cessera de fonctionner.', confirmRemove: 'Retirer ce membre de l’équipe ?', confirmLeave: 'Voulez-vous quitter l’équipe ?', confirmRemoveDoc: 'Retirer ce document de la bibliothèque de l’équipe ?',
       tCopied: 'Copié.', tCopyFail: 'Copie impossible ; copiez le code manuellement.', tCodeNew: 'Code d’invitation mis à jour.', tCreated: 'Espace équipe créé.', tJoined: 'Vous avez rejoint l’équipe.', tContributed: 'Contribution prélevée sur votre portefeuille.', tLeft: 'Vous avez quitté l’équipe.', tDocAdded: 'Document ajouté à la bibliothèque de l’équipe.',
-      e_generic: 'L’opération a échoué.', e_secure: 'Impossible de charger la connexion sécurisée.', e_auth_required: 'Connectez-vous d’abord.', e_already_in_team: 'Vous êtes déjà membre d’une équipe.', e_invalid_invite_code: 'Code d’invitation invalide.', e_team_full: 'L’équipe est complète.', e_insufficient_wallet: 'Le solde de votre portefeuille est insuffisant.', e_not_in_team: 'Vous n’appartenez à aucune équipe.', e_not_owner: 'Action réservée au responsable.', e_bad_name: 'Le nom doit comporter entre 2 et 100 caractères.', e_bad_goal: 'L’objectif doit être compris entre 100 et 10 000 000.', e_bad_contribution: 'La contribution doit être comprise entre 50 et 1 000 000.', e_too_many_attempts: 'Trop de tentatives. Réessayez plus tard.',
+      e_generic: 'L’opération a échoué.', e_secure: 'Impossible de charger la connexion sécurisée.', e_auth_required: 'Connectez-vous d’abord.', e_already_in_team: 'Vous êtes déjà membre d’une équipe.', e_invalid_invite_code: 'Code d’invitation invalide.', e_team_full: 'L’équipe est complète.', e_insufficient_wallet: 'Le solde de votre portefeuille est insuffisant.', e_insufficient_funds: 'Le solde de votre portefeuille est insuffisant.', e_bad_amount: 'La contribution doit être comprise entre 50 et 1 000 000.', e_owner_has_members: 'Vous ne pouvez pas quitter l’équipe tant qu’elle a d’autres membres. Retirez-les d’abord.', e_team_has_balance: 'Impossible de supprimer une équipe qui a un solde collectif.', e_forbidden: 'Action non autorisée.', e_not_in_team: 'Vous n’appartenez à aucune équipe.', e_not_owner: 'Action réservée au responsable.', e_bad_name: 'Le nom doit comporter entre 2 et 100 caractères.', e_bad_goal: 'L’objectif doit être compris entre 100 et 10 000 000.', e_bad_contribution: 'La contribution doit être comprise entre 50 et 1 000 000.', e_too_many_attempts: 'Trop de tentatives. Réessayez plus tard.',
       footer: 'Medad — collaboration d’équipe, vie privée préservée.'
     },
     en: {
@@ -56,12 +56,12 @@
       fundTitle: 'Subscription fund', fundDesc: 'Your contribution is debited from your personal wallet and added securely to the team balance.', contributeLabel: 'Contribution amount (DZD)', contributeBtn: 'Contribute from my wallet',
       fundPrivacy: 'Members cannot see your personal wallet balance or private purchases.', fundReached: 'Subscription goal reached', fundRemaining: 'Left to reach the goal: {amount}', percentOf: '{p}%',
       recentTitle: 'Recent contributions',
-      membersTitle: 'Members and invitations', roleOwner: 'Team owner', roleMember: 'Member', uses: '{n} use(s)', copyCode: 'Copy code', copyLink: 'Copy invite link', regen: 'Change code', inviteShared: 'The invite code is shared by the team owner.', remove: 'Remove', leave: 'Leave team', you: 'You',
+      membersTitle: 'Members and invitations', roleOwner: 'Team owner', roleMember: 'Member', uses: '{n} use(s)', contributedAmt: 'contributed {amount}', copyCode: 'Copy code', copyLink: 'Copy invite link', regen: 'Change code', inviteShared: 'The invite code is shared by the team owner.', remove: 'Remove', leave: 'Leave team', you: 'You',
       libTitle: 'Team library', libDesc: 'Share your paid documents with the team. Your private purchases stay hidden unless you choose them.', libEmpty: 'The shared library is empty for now.', libPick: 'Choose a paid document to share', libAdd: 'Add to team library', libLoading: 'Loading your documents…', libNoPurchases: 'No paid documents available to share yet.', libPickFirst: 'Pick a document from the list first.', libDoc: 'Document', libLoadErr: 'Could not load the shared library.', purchasesErr: 'Could not load your purchases.',
       actTitle: 'Team usage', monthCurrent: 'This month', monthPrev: 'Last month', colMember: 'Member', colUses: 'AI uses', colUnits: 'Units', actEmpty: 'No usage in this period.',
       confirmOk: 'Confirm', confirmCancel: 'Cancel', confirmRegen: 'Change the current code? The old code will stop working.', confirmRemove: 'Remove this member from the team?', confirmLeave: 'Do you want to leave the team?', confirmRemoveDoc: 'Remove this document from the team library?',
       tCopied: 'Copied.', tCopyFail: 'Copy failed; please copy the code manually.', tCodeNew: 'Invite code updated.', tCreated: 'Team workspace created.', tJoined: 'You joined the team.', tContributed: 'Contribution taken from your personal wallet.', tLeft: 'You left the team.', tDocAdded: 'Document added to the team library.',
-      e_generic: 'Something went wrong.', e_secure: 'Could not load the secure connection.', e_auth_required: 'Please sign in first.', e_already_in_team: 'You are already in a team.', e_invalid_invite_code: 'Invalid invite code.', e_team_full: 'The team is full.', e_insufficient_wallet: 'Your wallet balance is not enough.', e_not_in_team: 'You do not belong to a team.', e_not_owner: 'Only the owner can do this.', e_bad_name: 'The name must be 2 to 100 characters.', e_bad_goal: 'The goal must be between 100 and 10,000,000.', e_bad_contribution: 'The contribution must be between 50 and 1,000,000.', e_too_many_attempts: 'Too many attempts. Try again later.',
+      e_generic: 'Something went wrong.', e_secure: 'Could not load the secure connection.', e_auth_required: 'Please sign in first.', e_already_in_team: 'You are already in a team.', e_invalid_invite_code: 'Invalid invite code.', e_team_full: 'The team is full.', e_insufficient_wallet: 'Your wallet balance is not enough.', e_insufficient_funds: 'Your wallet balance is not enough.', e_bad_amount: 'The contribution must be between 50 and 1,000,000.', e_owner_has_members: 'You cannot leave while the team has other members. Remove them first.', e_team_has_balance: 'A team that holds a shared balance cannot be deleted.', e_forbidden: 'This action is not allowed.', e_not_in_team: 'You do not belong to a team.', e_not_owner: 'Only the owner can do this.', e_bad_name: 'The name must be 2 to 100 characters.', e_bad_goal: 'The goal must be between 100 and 10,000,000.', e_bad_contribution: 'The contribution must be between 50 and 1,000,000.', e_too_many_attempts: 'Too many attempts. Try again later.',
       footer: 'Medad — team collaboration, personal privacy.'
     }
   };
@@ -77,7 +77,7 @@
   const money = (n) => `${num(n)} ${CUR[lang]}`;
 
   /* ---------------- state ---------------- */
-  let user = null, teamData = null, members = [], docs = [], contribs = [], purchases = [], purchasesError = false;
+  let user = null, teamData = null, members = [], docs = [], purchases = [], purchasesError = false;
   let selectedDoc = '', month = 'current', purchasesLoading = false;
   const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
   let contribRequestId = newId();
@@ -183,13 +183,11 @@
   }
   async function loadExtras() {
     purchasesLoading = true; renderPicker();
-    const [d, c, p] = await Promise.all([
+    const [d, p] = await Promise.all([
       sb.rpc('medad_team_documents_list').then((r) => r, (e) => ({ error: e })),
-      sb.rpc('medad_team_contributions_list', { p_limit: 12 }).then((r) => r, (e) => ({ error: e })),
       sb.from('orders').select('document_id,documents(id,title)').eq('user_id', user.id).eq('status', 'paid').not('document_id', 'is', null).then((r) => r, (e) => ({ error: e }))
     ]);
     docs = d.error ? null : (Array.isArray(d.data) ? d.data : (d.data?.documents || []));
-    contribs = c.error || !Array.isArray(c.data) ? null : c.data;
     purchasesError = Boolean(p.error); purchasesLoading = false;
     const seen = new Set(); purchases = [];
     (p.data || []).forEach((o) => { const x = o.documents; if (x && !seen.has(x.id)) { seen.add(x.id); purchases.push({ id: x.id, title: x.title }); } });
@@ -241,7 +239,7 @@
       const row = el('div', 'team-row'); const name = m.member_name || T('roleMember');
       row.append(el('div', 'team-avatar', initial(name)));
       const info = el('div', 'grow'); const strong = el('strong', '', name + (m.user_id === user.id ? ` · ${T('you')}` : ''));
-      info.append(strong, el('small', '', `${m.role === 'owner' ? T('roleOwner') : T('roleMember')} · ${T('uses', { n: num(m.generations) })}`));
+      info.append(strong, el('small', '', `${m.role === 'owner' ? T('roleOwner') : T('roleMember')} · ${T('uses', { n: num(m.generations) })}` + (Number(m.contributed) > 0 ? ` · ${T('contributedAmt', { amount: money(m.contributed) })}` : '')));
       row.append(info);
       if (t.is_owner && m.user_id !== user.id) {
         row.append(button(T('remove'), 'team-mini danger', async () => {
@@ -285,7 +283,8 @@
   }
   function renderContribs() {
     const wrap = $('#team-contribs-wrap'), box = $('#team-contribs');
-    if (!contribs || !contribs.length) { wrap.hidden = true; return; }
+    const contribs = (teamData?.ledger || []).filter((l) => l.kind === 'contribution').slice(0, 8);
+    if (!contribs.length) { wrap.hidden = true; return; }
     wrap.hidden = false; box.replaceChildren();
     contribs.forEach((c) => {
       const row = el('div', 'team-row'); row.append(el('div', 'team-avatar', initial(c.member_name)));
