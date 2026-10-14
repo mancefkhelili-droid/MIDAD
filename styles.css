@@ -1045,3 +1045,5 @@ html[data-theme="dark"] .seg-chip.active,html[data-theme="dark"] .wallet-method-
 
 .ai-detected{min-height:18px;margin:2px 0;font-size:12px;font-weight:800;color:var(--accent);direction:ltr;text-align:start}
 .ai-advanced{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:8px 0}.ai-advanced>summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--muted)}.ai-advanced label{display:grid;gap:6px;margin-top:10px}
+
+.ai-detected.is-bad{color:var(--danger-fg);direction:inherit}

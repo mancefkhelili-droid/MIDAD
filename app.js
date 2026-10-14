@@ -3649,9 +3649,10 @@ function sanitizeAiHtml(value) {
   return out;
 }
 let aiErrDetail = '';
+let aiErrKind = '';
 async function aiInvokeErrorCode(err) {
-  aiErrDetail = '';
-  try { const r = err?.context; if (r && typeof r.clone === 'function') { const j = await r.clone().json(); aiErrDetail = String(j?.detail || '').slice(0, 200); return j?.error_code || ''; } } catch (_) { /* not JSON */ }
+  aiErrDetail = ''; aiErrKind = '';
+  try { const r = err?.context; if (r && typeof r.clone === 'function') { const j = await r.clone().json(); aiErrDetail = String(j?.detail || '').slice(0, 200); aiErrKind = String(j?.kind || ''); return j?.error_code || ''; } } catch (_) { /* not JSON */ }
   return '';
 }
 // Accepts whatever the user pasted (base URL, full endpoint URL, wrong API type) and returns the right style/base/model.
@@ -3689,7 +3690,31 @@ function aiApplyProvider(n) {
 // ---- Automatic provider setup: the user only pastes a key (and optionally any link). ----
 const AI_PROVIDER_KEY = 'medad-ai-provider';
 function aiLoadSavedProvider() { try { const j = JSON.parse(localStorage.getItem(AI_PROVIDER_KEY) || 'null'); if (j && j.base && j.style) return j; } catch (_) {} return null; }
-function aiSaveProvider(n) { try { localStorage.setItem(AI_PROVIDER_KEY, JSON.stringify({ style: n.style, base: n.base, model: n.model })); } catch (_) {} }
+function aiSaveProvider(n) { try { localStorage.setItem(AI_PROVIDER_KEY, JSON.stringify({ style: n.style, base: n.base, model: n.model, tag: n.tag || '' })); } catch (_) {} }
+function aiClearProvider() { try { localStorage.removeItem(AI_PROVIDER_KEY); } catch (_) {} }
+function aiKeyTag(k) { return String(k).length + ':' + String(k).slice(-8); }
+function aiWithTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('client_timeout')), ms))]); }
+function aiKindMessage(kind, detail) {
+  const m = {
+    auth: L3('المفتاح مرفوض أو الخدمة غير مفعّلة لهذا المفتاح. تأكد أنك نسخته كاملًا من لوحة المزوّد.', 'Clé refusée ou service non activé pour cette clé. Vérifiez qu’elle est copiée en entier.', 'The key was rejected or the service is not enabled for it. Make sure it was copied in full.'),
+    quota: L3('تجاوز المفتاح حصته أو حدّ الطلبات. انتظر قليلًا أو استعمل مفتاحًا آخر.', 'Quota ou limite de requêtes dépassé. Attendez un peu ou utilisez une autre clé.', 'The key hit its quota or rate limit. Wait a moment or use another key.'),
+    timeout: L3('المزوّد لم يرد في الوقت المناسب. أعد المحاولة بعد لحظات.', 'Le fournisseur n’a pas répondu à temps. Réessayez dans un instant.', 'The provider did not answer in time. Try again in a moment.'),
+    model: L3('تعذّر العثور على نموذج مناسب لهذا المفتاح.', 'Aucun modèle adapté trouvé pour cette clé.', 'No suitable model was found for this key.'),
+    down: L3('خدمة المزوّد متعطلة مؤقتًا. أعد المحاولة لاحقًا.', 'Le service du fournisseur est momentanément indisponible.', 'The provider service is temporarily unavailable.'),
+    network: L3('تعذّر الوصول إلى المزوّد. تحقق من الرابط والمفتاح.', 'Fournisseur injoignable. Vérifiez le lien et la clé.', 'Could not reach the provider. Check the link and the key.'),
+    empty: L3('أعاد المزوّد ردًا فارغًا. أعد المحاولة بصياغة أخرى.', 'Réponse vide du fournisseur. Reformulez et réessayez.', 'The provider returned an empty reply. Rephrase and try again.'),
+    other: L3('رفض المزوّد الطلب.', 'Le fournisseur a refusé la requête.', 'The provider rejected the request.')
+  };
+  return (m[kind] || m.other) + (detail ? ' — ' + String(detail).slice(0, 160) : '');
+}
+async function aiDetectProvider(apiKey, base, style, model) {
+  try {
+    const { data, error } = await aiWithTimeout(supabase.functions.invoke('medad-ai-document', { body: { action: 'detect', api_key: apiKey, api_base: base || '', api_style: style || 'auto', model: model || '' } }), 30000);
+    if (error) { await aiInvokeErrorCode(error); return { transport: true }; }
+    return data && typeof data === 'object' ? data : { transport: true };
+  } catch (_) { return { transport: true }; }
+}
+function aiShowBad(msg) { const el = $('#ai-detected'); if (!el) return; el.textContent = '✗ ' + msg; el.classList.add('is-bad'); }
 function aiProviderCandidates(apiKey, rawBase, rawModel, rawStyle) {
   const out = []; const seen = new Set();
   const add = (n) => { const k = n.style + '|' + n.base + '|' + n.model; if (!seen.has(k)) { seen.add(k); out.push(n); } };
@@ -3724,7 +3749,7 @@ function aiProviderCandidates(apiKey, rawBase, rawModel, rawStyle) {
   return out;
 }
 function aiShowDetected(n) {
-  const el = $('#ai-detected'); if (!el) return;
+  const el = $('#ai-detected'); if (!el) return; el.classList.remove('is-bad');
   const names = { responses: 'OpenAI', chat_completions: 'OpenAI-compatible', anthropic: 'Claude', gemini: 'Gemini' };
   el.textContent = n ? '✓ ' + (names[n.style] || n.style) + ' · ' + n.model : '';
 }
@@ -3811,19 +3836,26 @@ $('#ai-form')?.addEventListener('submit', async (e) => {
  try{
   const attachment=file?{name:file.name,type:file.type,data_url:await fileToDataUrl(file)}:null;
   let profileBody={};if($('#ai-send-profile')?.checked){const p=await getDocumentProfile();profileBody={full_name:p.full_name||'',birth_date:p.birth_date||'',address:p.address||'',phone:p.phone||'',organization:p.organization||'',job_title:p.job_title||''}}
-  const prior=activeAiMessages.filter(m=>!m.error).slice(0,-1).slice(-10).map(m=>{const text=m.role==='assistant'?(m.html||m.content||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1800):(m.content||'').slice(0,1200);return (m.role==='assistant'?'Medad AI':'User')+': '+text}).join('\n\n');const contextualPrompt=(prior?'Conversation so far (use this as context; answer the latest user message):\n'+prior+'\n\nLatest user message:\n':'')+userMessage.content;let data=null,error=null,used=null;for(const cand of candidates){const r=await supabase.functions.invoke('medad-ai-document',{body:{prompt:contextualPrompt.slice(-5800),kind:$('#ai-kind').value,language:$('#ai-language').value,consent:true,attachment,profile:profileBody,api_key:apiKey,api_base:cand.base,api_style:cand.style,model:cand.model}});data=r.data;error=r.error;if(!error&&data?.html){used=cand;break}if(error){const c=await aiInvokeErrorCode(error);if(!['provider','bad_model','empty'].includes(c))break}}
-  if(used){aiSaveProvider(used);aiApplyProvider(used);aiShowDetected(used)}
-  pending.remove();if(error){const code=await aiInvokeErrorCode(error),key='ai_'+code;const msg=ft(key);throw new Error((msg===key?ft('error'):msg)+(aiErrDetail?' — '+aiErrDetail:''))}if(!data?.html)throw new Error(ft('error'));
+  const prior=activeAiMessages.filter(m=>!m.error).slice(0,-1).slice(-10).map(m=>{const text=m.role==='assistant'?(m.html||m.content||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1800):(m.content||'').slice(0,1200);return (m.role==='assistant'?'Medad AI':'User')+': '+text}).join('\n\n');const contextualPrompt=(prior?'Conversation so far (use this as context; answer the latest user message):\n'+prior+'\n\nLatest user message:\n':'')+userMessage.content;let provider=null;{const sp=aiLoadSavedProvider(),tag=aiKeyTag(apiKey),mb=($('#ai-api-base')?.value||'').trim(),mst=$('#ai-api-style')?.value||'auto',mm=($('#ai-model')?.value||'').trim();
+   if(sp&&sp.tag===tag&&!mb&&mst==='auto'&&!mm)provider=sp;
+   else{const d=await aiDetectProvider(apiKey,mb,mst,mm);if(d.ok){provider={style:d.style,base:d.base,model:d.model,tag};aiSaveProvider(provider);aiShowDetected(provider)}else if(!d.transport){aiClearProvider();aiShowBad(aiKindMessage(d.kind,d.detail));throw new Error(aiKindMessage(d.kind,d.detail))}}}
+  const tries=provider?[provider]:candidates;
+  let data=null,error=null,used=null;for(const cand of tries){const r=await aiWithTimeout(supabase.functions.invoke('medad-ai-document',{body:{prompt:contextualPrompt.slice(-5800),kind:$('#ai-kind').value,language:$('#ai-language').value,consent:true,attachment,profile:profileBody,api_key:apiKey,api_base:cand.base,api_style:cand.style,model:cand.model}}),140000);data=r.data;error=r.error;if(!error&&data?.html){used=cand;break}if(error){const c=await aiInvokeErrorCode(error);if(!['provider','bad_model','empty'].includes(c)||['timeout','auth','quota'].includes(aiErrKind))break}}
+  if(used){aiSaveProvider({...used,model:data?.model||used.model,tag:aiKeyTag(apiKey)});aiShowDetected({...used,model:data?.model||used.model})}else if(provider&&['model','auth'].includes(aiErrKind))aiClearProvider();
+  pending.remove();if(error){const code=await aiInvokeErrorCode(error),key='ai_'+code;const msg=ft(key);if(aiErrKind&&(code==='provider'||code==='empty'))throw new Error(aiKindMessage(aiErrKind,aiErrDetail));throw new Error((msg===key?ft('error'):msg)+(aiErrDetail?' — '+aiErrDetail:''))}if(!data?.html)throw new Error(ft('error'));
   activeAiMessages.push({role:'assistant',html:data.html,content:aiChatText('aiDraftReady','أنشأت لك مسودة قابلة للتعديل. يمكنك طلب التعديل عليها برسالة جديدة.')});aiRenderConversation();const saved=await aiSaveChat();if(!saved&&fb){fb.textContent=aiChatText('aiHistorySaveWarning','تم إنشاء الرد، لكن تعذّر حفظ سجل المحادثة.');fb.className='auth-feedback error'}
- }catch(err){pending.remove();const message=String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message,error:true});aiRenderConversation();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
+ }catch(err){pending.remove();const message=err?.message==='client_timeout'?aiKindMessage('timeout',''):String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message,error:true});aiRenderConversation();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
 });
-$('#ai-api-key')?.addEventListener('input',()=>{const k=$('#ai-api-key').value.trim();const c=k?aiProviderCandidates(k,'','',''):[];aiShowDetected(c[0]||null)});
+let aiDetTimer=null;
+$('#ai-api-key')?.addEventListener('input',()=>{clearTimeout(aiDetTimer);const k=$('#ai-api-key').value.trim();if(!k){aiShowDetected(null);return}
+ aiShowDetected(aiProviderCandidates(k,'','','')[0]||null);
+ aiDetTimer=setTimeout(async()=>{if(k.length<16)return;const d=await aiDetectProvider(k,'','auto','');if($('#ai-api-key').value.trim()!==k)return;if(d.ok){const p={style:d.style,base:d.base,model:d.model,tag:aiKeyTag(k)};aiSaveProvider(p);aiShowDetected(p)}else if(!d.transport)aiShowBad(aiKindMessage(d.kind,d.detail))},800)});
 $('#ai-new-chat')?.addEventListener('click',()=>{activeAiChatId=null;activeAiMessages=[];aiRenderConversation();$('#ai-prompt')?.focus();aiLoadHistory()});
 $('#ai-settings-toggle')?.addEventListener('click',()=>{const d=$('#ai-provider-settings');if(d){d.open=!d.open;if(d.open){setTimeout(()=>{d.scrollIntoView({behavior:'smooth',block:'start'});},80)}else{$('#ai-dialog')?.scrollTo({top:0,behavior:'smooth'})}}});
 $('#ai-file')?.addEventListener('change',()=>{const file=$('#ai-file').files?.[0],box=$('#ai-chat-attachment');if(!box)return;box.replaceChildren();if(file){const pill=document.createElement('div');pill.className='ai-attachment-pill';pill.innerHTML='<i data-lucide="file"></i><span></span><button type="button" aria-label="إزالة الملف"><i data-lucide="x"></i></button>';pill.querySelector('span').textContent=file.name+' · '+Math.ceil(file.size/1024)+' KB';pill.querySelector('button').addEventListener('click',()=>{$('#ai-file').value='';box.replaceChildren()});box.append(pill);window.lucide?.createIcons()}});
 document.querySelectorAll('[data-ai-suggestion]').forEach(b=>b.addEventListener('click',()=>{$('#ai-prompt').value=b.dataset.aiSuggestion||'';$('#ai-prompt').focus()}));
 $('#ai-prompt')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#ai-form')?.requestSubmit()}});
-$('#ai-open')?.addEventListener('click',()=>{try{const k=localStorage.getItem('medad-ai-user-api-key');if(k){$('#ai-api-key').value=k;$('#ai-remember-key').checked=true;if(localStorage.getItem('medad-ai-consent')==='1'&&$('#ai-consent'))$('#ai-consent').checked=true;const sp=aiLoadSavedProvider();if(sp){aiApplyProvider(sp);aiShowDetected(sp)}}else{$('#ai-provider-settings')?.setAttribute('open','')}}catch(_){};if($('#ai-chat-history'))aiLoadHistory();openFeatureDialog('#ai-dialog');aiRenderConversation()});
+$('#ai-open')?.addEventListener('click',()=>{try{const k=localStorage.getItem('medad-ai-user-api-key');if(k){$('#ai-api-key').value=k;$('#ai-remember-key').checked=true;if(localStorage.getItem('medad-ai-consent')==='1'&&$('#ai-consent'))$('#ai-consent').checked=true;const sp=aiLoadSavedProvider();if(sp&&sp.tag===aiKeyTag(k))aiShowDetected(sp)}else{$('#ai-provider-settings')?.setAttribute('open','')}}catch(_){};if($('#ai-chat-history'))aiLoadHistory();openFeatureDialog('#ai-dialog');aiRenderConversation()});
 $('#ai-use-profile')?.addEventListener('click',async()=>applyProfileToEditable($('#ai-result'),await getDocumentProfile()));
 $('#ai-open-editor')?.addEventListener('click',()=>{const content=$('#document-content');if(!content){showToast(ft('error'),'error');return}content.replaceChildren(sanitizeAiHtml($('#ai-result').innerHTML));$('#ai-dialog')?.close();document.body.classList.remove('landing-on');$('#workspace')?.scrollIntoView({behavior:'smooth',block:'start'});showToast(ft('generated'),'success')});
 $('#ai-print')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w){showToast('Allow pop-ups to print','error');return}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Medad</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.8;padding:24px;color:#20231b}h1,h2{color:#485331}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd2bc;padding:8px}</style></head><body>'+$('#ai-result').innerHTML+'</body></html>');w.document.close();w.focus();w.print()});
