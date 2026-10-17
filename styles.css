@@ -1063,3 +1063,4 @@ html[data-theme="dark"] .seg-chip.active,html[data-theme="dark"] .wallet-method-
  .ai-chat-topbar p,.ai-status,.ai-chat-topbar .section-kicker,.ai-private-note{display:none}
  .ai-welcome p{font-size:12px}.ai-suggestions button{padding:10px 12px;font-size:13px}
 }
+.topbar-ai{padding:8px;width:38px;height:38px;justify-content:center;text-decoration:none}

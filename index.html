@@ -21,7 +21,7 @@
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <script>try{var t=localStorage.getItem("medad-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="styles.css?v=63" />
+  <link rel="stylesheet" href="styles.css?v=64" />
 </head>
 <body class="landing-on">
   <section class="landing" id="landing" aria-label="مرحبًا بك في مداد">
@@ -68,11 +68,12 @@
       <a href="#how-it-works">كيف تعمل؟</a>
       <a href="#security">الأمان</a>
       <a href="#plans" id="plans-nav">الباقات</a>
-      <a href="paper.html">ورق مخطط</a>
+      
     </nav>
     <div class="header-actions">
       <span class="sub-badge is-hidden" id="sub-badge" title="رصيد اشتراكك"></span>
-      <button class="topbar-ai" id="topbar-ai" type="button" aria-label="المساعد الذكي" title="المساعد الذكي"><i data-lucide="sparkles"></i><span>المساعد الذكي</span></button>
+      <a class="topbar-ai" id="topbar-paper" href="paper.html" aria-label="ورق مخطط" title="ورق مخطط"><i data-lucide="grid-3x3"></i></a>
+      <button class="topbar-ai" id="topbar-ai" type="button" aria-label="المساعد الذكي" title="المساعد الذكي"><i data-lucide="sparkles"></i></button>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="الوضع الداكن"><i data-lucide="moon"></i></button>
       <!-- زر الدخول - يظهر عند عدم تسجيل الدخول -->
       <button class="login-trigger" id="login-trigger" type="button" aria-label="تسجيل الدخول">
@@ -426,7 +427,7 @@
 document.addEventListener('click',q,true);document.addEventListener('submit',q,true);})();
 </script>
 <script src="i18n.js?v=4"></script>
-  <script type="module" src="app.js?v=58"></script>
+  <script type="module" src="app.js?v=59"></script>
 <div class="edit-dock is-hidden" id="edit-dock">
   <div class="dock-panel is-hidden" id="dock-panel"><div class="dock-tabs" id="dock-tabs"></div><div class="dock-body" id="dock-body"></div></div>
   <div class="dock-main">

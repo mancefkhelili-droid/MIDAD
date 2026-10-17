@@ -321,6 +321,7 @@ function renderAccount(user) {
   if ($('#profile-role')) $('#profile-role').textContent = 'مشتري';
   refreshAdminState(user);
   if (userChanged) refreshSubscription(user);
+  applyProfileFullName(user);
 }
 
 function openProfileDropdown() {
@@ -4021,3 +4022,14 @@ $('#btn-ai-edit')?.addEventListener('click', () => {
 $('#ai-history-toggle')?.addEventListener('click',e=>{e.stopPropagation();document.querySelector('.ai-chat-layout')?.classList.toggle('show-history')});
 document.querySelector('.ai-chat-layout')?.addEventListener('click',e=>{const l=e.currentTarget;if(!l.classList.contains('show-history'))return;if(!e.target.closest('.ai-chat-sidebar')||e.target.closest('.ai-history-item,#ai-new-chat'))l.classList.remove('show-history')});
 $('#ai-dialog')?.addEventListener('close',()=>document.querySelector('.ai-chat-layout')?.classList.remove('show-history'));
+
+async function applyProfileFullName(user){
+  try{
+    if(!supabase||!user)return;
+    const {data}=await supabase.from('user_document_profiles').select('full_name').eq('user_id',user.id).maybeSingle();
+    const n=(data?.full_name||'').trim();if(!n||currentUser?.id!==user.id)return;
+    ['#profile-trigger-name','#profile-dropdown-name','#profile-name'].forEach(s=>{const e=$(s);if(e)e.textContent=n});
+    ['#profile-avatar-mini','#profile-dropdown-avatar','#profile-avatar'].forEach(s=>{const e=$(s);if(e)e.textContent=n.charAt(0).toUpperCase()});
+  }catch(_){}
+}
+$('#profile-data-form')?.addEventListener('submit',()=>setTimeout(()=>applyProfileFullName(currentUser),1500));
