@@ -1869,7 +1869,10 @@ function renderSubCounters(license) {
 }
 
 async function processSubPrint(license) {
-  const { data, error } = await supabase.rpc('print_document', { p_document_id: license.document_id, p_copies: 1 });
+  if (license.isAiDraft) license = { ...license, sheets: aiDraftSheets() };
+  const { data, error } = license.isAiDraft
+    ? await supabase.rpc('print_ai_draft', { p_sheets: license.sheets })
+    : await supabase.rpc('print_document', { p_document_id: license.document_id, p_copies: 1 });
   if (error || data?.status !== 'ok') {
     throw new Error(data?.status === 'daily_limit' ? 'بلغت حدّ 30 ورقة لهذا اليوم. يتجدد الرصيد غدًا.' : data?.status === 'no_sheets' ? 'رصيد أوراقك لا يكفي لطباعة هذه الوثيقة.' : 'تعذر إجراء الطباعة. تحقق من اتصالك أو من رصيدك.');
   }
@@ -3753,17 +3756,30 @@ function aiShowDetected(n) {
   const names = { responses: 'OpenAI', chat_completions: 'OpenAI-compatible', anthropic: 'Claude', gemini: 'Gemini' };
   el.textContent = n ? '✓ ' + (names[n.style] || n.style) + ' · ' + n.model : '';
 }
-function aiOpenDraftInEditor(html) {
+function aiDraftSheets() {
+  const el = $('#document-content'); if (!el) return 1;
+  return Math.max(1, Math.min(50, Math.ceil((el.scrollHeight || 1) / 1050)));
+}
+function aiOpenDraftInEditor(html, title) {
   const sec = $('#security'), target = $('#document-content');
   if (!sec || !target) { showToast(ft('error'), 'error'); return; }
+  const sm = subSummary || {};
+  const unlimited = Boolean(sm.unlimited);
+  const remaining = Math.max(0, Number(unlimited ? (sm.daily_remaining ?? 0) : (sm.remaining ?? 0)));
+  renderLicense({
+    license_key: 'AI-' + Date.now().toString(36).toUpperCase(),
+    document_id: null, isSub: true, isAiDraft: true, sheets: 1, summary: subSummary,
+    remaining_prints: remaining, total_prints: remaining, email: currentUser?.email ?? '',
+    document: { title: title || L3('مسودة الذكاء الاصطناعي', 'Brouillon IA', 'AI draft'), content: '', storage_path: null, category: L3('مسودة قابلة للتعديل', 'Brouillon modifiable', 'Editable draft') }
+  });
   target.classList.remove('is-pdf'); target.dataset.pdfReady = '0';
   target.replaceChildren(sanitizeAiHtml(html));
-  const t = $('#document-title'); if (t) t.textContent = L3('مسودة الذكاء الاصطناعي', 'Brouillon IA', 'AI draft');
-  const cat = $('#doc-category'); if (cat) cat.textContent = L3('مسودة قابلة للتعديل', 'Brouillon modifiable', 'Editable draft');
+  target.setAttribute('contenteditable', 'true');
+  if (activeLicense) { activeLicense.sheets = aiDraftSheets(); renderSubCounters(activeLicense); }
   sec.classList.remove('is-hidden'); document.body.classList.remove('landing-on');
   $('#ai-dialog')?.close();
   setTimeout(() => sec.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
-  showToast(ft('generated'), 'success');
+  showToast(subSummary?.has_subscription ? ft('generated') : L3('المسودة جاهزة. الطباعة وتصدير PDF يتطلبان باقة فعّالة.', 'Brouillon prêt. L’impression et l’export PDF nécessitent un forfait actif.', 'Draft ready. Printing and PDF export need an active plan.'), 'success');
 }
 let activeAiChatId = null;
 let activeAiMessages = [];
@@ -3772,7 +3788,7 @@ function aiChatText(key, fallback) { const v=ft(key); return !v || v===key ? fal
 function aiEsc(value) { return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function aiRenderMessage(message, index) {
   const row=document.createElement('article'); row.className='ai-message '+(message.role==='user'?'is-user':'is-assistant')+(message.error?' is-error':'');
-  const avatar=document.createElement('div'); avatar.className='ai-message-avatar'; avatar.innerHTML=message.role==='user'?'<i data-lucide="user-round"></i>':(window.MedadMascot?window.MedadMascot.mini(message.error?'sad':'idle'):'<i data-lucide="sparkles"></i>');
+  const avatar=document.createElement('div'); avatar.className='ai-message-avatar'; avatar.innerHTML=message.role==='user'?'<i data-lucide="user-round"></i>':'<i data-lucide="sparkles"></i>';
   const body=document.createElement('div'); body.className='ai-message-body';
   const label=document.createElement('div'); label.className='ai-message-label'; label.textContent=message.role==='user'?aiChatText('aiYou','أنت'):'Medad AI'; body.append(label);
   const content=document.createElement('div'); content.className='ai-message-content';
@@ -3831,12 +3847,12 @@ async function aiSaveChat() {
  else {const {error}=await supabase.from('medad_ai_chats').update({title,messages:activeAiMessages.filter(m=>!m.error),updated_at:new Date().toISOString()}).eq('id',activeAiChatId).eq('user_id',currentUser.id);if(error){console.error('AI chat update failed',error);return false}}
  await aiLoadHistory();return true;
 }
-function aiSetBusy(busy){aiChatBusy=busy;if(busy)document.dispatchEvent(new CustomEvent('medad-ai-state',{detail:'thinking'}));const btn=$('#ai-generate');if(btn){btn.disabled=busy;btn.innerHTML=busy?'<span class="ai-spinner"></span><span>'+aiEsc(aiChatText('generating','يفكر…'))+'</span>':'<i data-lucide="arrow-up"></i><span>'+aiEsc(aiChatText('aiSend','إرسال'))+'</span>'}$('#ai-prompt')?.toggleAttribute('disabled',busy);window.lucide?.createIcons()}
+function aiSetBusy(busy){aiChatBusy=busy;const btn=$('#ai-generate');if(btn){btn.disabled=busy;btn.innerHTML=busy?'<span class="ai-spinner"></span><span>'+aiEsc(aiChatText('generating','يفكر…'))+'</span>':'<i data-lucide="arrow-up"></i><span>'+aiEsc(aiChatText('aiSend','إرسال'))+'</span>'}$('#ai-prompt')?.toggleAttribute('disabled',busy);window.lucide?.createIcons()}
 $('#ai-form')?.addEventListener('submit', async (e) => {
  e.preventDefault(); if(aiChatBusy)return;
  if(!supabase||!currentUser){openAuthDialog('login');return}
  const fb=$('#ai-feedback');if(fb){fb.textContent='';fb.className='auth-feedback'}
- if(!currentUser){if(fb){fb.textContent=L3('سجّل الدخول أولًا حتى يعمل المساعد ويحفظ محادثاتك.','Connectez-vous d’abord pour utiliser l’assistant et sauvegarder vos discussions.','Sign in first so the assistant can work and save your chats.');fb.className='auth-feedback error'}document.dispatchEvent(new CustomEvent('medad-ai-state',{detail:'sad'}));openAuthDialog('login');return}
+ if(!currentUser){if(fb){fb.textContent=L3('سجّل الدخول أولًا حتى يعمل المساعد ويحفظ محادثاتك.','Connectez-vous d’abord pour utiliser l’assistant et sauvegarder vos discussions.','Sign in first so the assistant can work and save your chats.');fb.className='auth-feedback error'}openAuthDialog('login');return}
  const prompt=$('#ai-prompt').value.trim(),file=$('#ai-file').files?.[0];if(!prompt&&!file){if(fb)fb.textContent=aiChatText('aiWriteMessage','اكتب رسالة أو أرفق ملفًا أولًا.');return}
  if(file&&file.size>8*1024*1024){if(fb)fb.textContent=aiChatText('aiFileTooBig','حجم الملف الأقصى 8 ميغابايت.');return}
  if(!$('#ai-consent')?.checked){$('#ai-provider-settings')?.setAttribute('open','');if(fb){fb.textContent=ft('aiNeedConsent');fb.className='auth-feedback error'}return}
@@ -3845,7 +3861,7 @@ $('#ai-form')?.addEventListener('submit', async (e) => {
  const candidates=aiProviderCandidates(apiKey,($('#ai-api-base')?.value||'').trim(),($('#ai-model')?.value||'').trim(),$('#ai-api-style')?.value||'auto');if(candidates.some(c=>!/^https:\/\//i.test(c.base)||c.base.length>300)){if(fb)fb.textContent=aiChatText('aiNeedUrl','الرابط يجب أن يبدأ بـ https://');return}
  try{localStorage.setItem('medad-ai-user-api-key',apiKey);localStorage.setItem('medad-ai-consent','1')}catch(_){}
  activeAiMessages=activeAiMessages.filter(m=>!m.error);const userMessage={role:'user',content:prompt||(file?aiChatText('aiAnalyzeAttachment','حلّل الملف المرفق وساعدني في تحويله إلى وثيقة قابلة للتعديل.'):'')};activeAiMessages.push(userMessage);aiRenderConversation();$('#ai-prompt').value='';$('#ai-prompt').style.height='';$('#ai-file').value='';$('#ai-chat-attachment')?.replaceChildren();
- const pending=document.createElement('article');pending.className='ai-message is-assistant ai-thinking';pending.innerHTML='<div class="ai-message-avatar">'+(window.MedadMascot?window.MedadMascot.mini('thinking'):'<i data-lucide="sparkles"></i>')+'</div><div class="ai-message-body"><div class="ai-message-label">Medad AI</div><div class="ai-message-content"><span class="ai-typing"><i></i><i></i><i></i></span> '+aiEsc(aiChatText('aiThinking','يحضّر إجابتك…'))+'</div></div>';$('#ai-chat-messages')?.append(pending);$('#ai-chat-messages').scrollTop=$('#ai-chat-messages').scrollHeight;aiSetBusy(true);
+ const pending=document.createElement('article');pending.className='ai-message is-assistant ai-thinking';pending.innerHTML='<div class="ai-message-avatar">'+'<i data-lucide="sparkles"></i>'+'</div><div class="ai-message-body"><div class="ai-message-label">Medad AI</div><div class="ai-message-content"><span class="ai-typing"><i></i><i></i><i></i></span> '+aiEsc(aiChatText('aiThinking','يحضّر إجابتك…'))+'</div></div>';$('#ai-chat-messages')?.append(pending);$('#ai-chat-messages').scrollTop=$('#ai-chat-messages').scrollHeight;aiSetBusy(true);
  try{
   const attachment=file?{name:file.name,type:file.type,data_url:await fileToDataUrl(file)}:null;
   let profileBody={};if($('#ai-send-profile')?.checked){const p=await getDocumentProfile();profileBody={full_name:p.full_name||'',birth_date:p.birth_date||'',address:p.address||'',phone:p.phone||'',organization:p.organization||'',job_title:p.job_title||''}}
@@ -3853,11 +3869,11 @@ $('#ai-form')?.addEventListener('submit', async (e) => {
    if(sp&&sp.tag===tag&&!mb&&mst==='auto'&&!mm)provider=sp;
    else{const d=await aiDetectProvider(apiKey,mb,mst,mm);if(d.ok){provider={style:d.style,base:d.base,model:d.model,tag};aiSaveProvider(provider);aiShowDetected(provider)}else if(!d.transport){aiClearProvider();aiShowBad(aiKindMessage(d.kind,d.detail));throw new Error(aiKindMessage(d.kind,d.detail))}}}
   const tries=provider?[provider]:candidates;
-  let data=null,error=null,used=null;for(const cand of tries){const r=await aiWithTimeout(supabase.functions.invoke('medad-ai-document',{body:{prompt:contextualPrompt.slice(-5800),kind:$('#ai-kind').value,language:$('#ai-language').value,consent:true,attachment,profile:profileBody,api_key:apiKey,api_base:cand.base,api_style:cand.style,model:cand.model}}),140000);data=r.data;error=r.error;if(!error&&data?.html){used=cand;break}if(error){const c=await aiInvokeErrorCode(error);if(!['provider','bad_model','empty'].includes(c)||['timeout','auth','quota'].includes(aiErrKind))break}}
+  let data=null,error=null,used=null;for(const cand of tries){const r=await aiWithTimeout(supabase.functions.invoke('medad-ai-document',{body:{source_html:aiEditSource||undefined,prompt:contextualPrompt.slice(-5800),kind:$('#ai-kind').value,language:$('#ai-language').value,consent:true,attachment,profile:profileBody,api_key:apiKey,api_base:cand.base,api_style:cand.style,model:cand.model}}),140000);data=r.data;error=r.error;if(!error&&data?.html){used=cand;break}if(error){const c=await aiInvokeErrorCode(error);if(!['provider','bad_model','empty'].includes(c)||['timeout','auth','quota'].includes(aiErrKind))break}}
   if(used){aiSaveProvider({...used,model:data?.model||used.model,tag:aiKeyTag(apiKey)});aiShowDetected({...used,model:data?.model||used.model})}else if(provider&&['model','auth'].includes(aiErrKind))aiClearProvider();
   pending.remove();if(error){const code=await aiInvokeErrorCode(error),key='ai_'+code;const msg=ft(key);if(aiErrKind&&(code==='provider'||code==='empty'))throw new Error(aiKindMessage(aiErrKind,aiErrDetail));throw new Error((msg===key?ft('error'):msg)+(aiErrDetail?' — '+aiErrDetail:''))}if(!data?.html)throw new Error(ft('error'));
-  document.dispatchEvent(new CustomEvent('medad-ai-state',{detail:'happy'}));activeAiMessages.push({role:'assistant',html:data.html,content:aiChatText('aiDraftReady','أنشأت لك مسودة قابلة للتعديل. يمكنك طلب التعديل عليها برسالة جديدة.')});aiRenderConversation();const saved=await aiSaveChat();if(!saved&&fb){fb.textContent=aiChatText('aiHistorySaveWarning','تم إنشاء الرد، لكن تعذّر حفظ سجل المحادثة.');fb.className='auth-feedback error'}
- }catch(err){document.dispatchEvent(new CustomEvent('medad-ai-state',{detail:'sad'}));pending.remove();const message=err?.message==='client_timeout'?aiKindMessage('timeout',''):String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message,error:true});aiRenderConversation();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
+  if(aiEditSource)aiEditSource=data.html;activeAiMessages.push({role:'assistant',html:data.html,content:aiChatText('aiDraftReady','أنشأت لك مسودة قابلة للتعديل. يمكنك طلب التعديل عليها برسالة جديدة.')});aiRenderConversation();const saved=await aiSaveChat();if(!saved&&fb){fb.textContent=aiChatText('aiHistorySaveWarning','تم إنشاء الرد، لكن تعذّر حفظ سجل المحادثة.');fb.className='auth-feedback error'}
+ }catch(err){pending.remove();const message=err?.message==='client_timeout'?aiKindMessage('timeout',''):String(err?.message||ft('error')).slice(0,300);activeAiMessages.push({role:'assistant',content:message,error:true});aiRenderConversation();if(fb){fb.textContent=message;fb.className='auth-feedback error'}}finally{aiSetBusy(false);$('#ai-prompt')?.focus()}
 });
 let aiDetTimer=null;
 $('#ai-api-key')?.addEventListener('input',()=>{clearTimeout(aiDetTimer);const k=$('#ai-api-key').value.trim();if(!k){aiShowDetected(null);return}
@@ -3868,10 +3884,8 @@ $('#ai-settings-toggle')?.addEventListener('click',()=>{const d=$('#ai-provider-
 $('#ai-file')?.addEventListener('change',()=>{const file=$('#ai-file').files?.[0],box=$('#ai-chat-attachment');if(!box)return;box.replaceChildren();if(file){const pill=document.createElement('div');pill.className='ai-attachment-pill';pill.innerHTML='<i data-lucide="file"></i><span></span><button type="button" aria-label="إزالة الملف"><i data-lucide="x"></i></button>';pill.querySelector('span').textContent=file.name+' · '+Math.ceil(file.size/1024)+' KB';pill.querySelector('button').addEventListener('click',()=>{$('#ai-file').value='';box.replaceChildren()});box.append(pill);window.lucide?.createIcons()}});
 document.querySelectorAll('[data-ai-suggestion]').forEach(b=>b.addEventListener('click',()=>{$('#ai-prompt').value=b.dataset.aiSuggestion||'';$('#ai-prompt').focus()}));
 $('#ai-prompt')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#ai-form')?.requestSubmit()}});
-$('#ai-open')?.addEventListener('click',()=>{try{const k=localStorage.getItem('medad-ai-user-api-key');if(k){$('#ai-api-key').value=k;$('#ai-remember-key').checked=true;if(localStorage.getItem('medad-ai-consent')==='1'&&$('#ai-consent'))$('#ai-consent').checked=true;const sp=aiLoadSavedProvider();if(sp&&sp.tag===aiKeyTag(k))aiShowDetected(sp)}else{$('#ai-provider-settings')?.setAttribute('open','')}}catch(_){};if($('#ai-chat-history'))aiLoadHistory();closeProfileDropdown();const _d=$('#ai-dialog');if(_d&&!_d.open)_d.showModal();aiDressWelcome();window.lucide?.createIcons();aiRenderConversation()});
+$('#ai-open')?.addEventListener('click',()=>{try{const k=localStorage.getItem('medad-ai-user-api-key');if(k){$('#ai-api-key').value=k;$('#ai-remember-key').checked=true;if(localStorage.getItem('medad-ai-consent')==='1'&&$('#ai-consent'))$('#ai-consent').checked=true;const sp=aiLoadSavedProvider();if(sp&&sp.tag===aiKeyTag(k))aiShowDetected(sp)}else{$('#ai-provider-settings')?.setAttribute('open','')}}catch(_){};if($('#ai-chat-history'))aiLoadHistory();closeProfileDropdown();const _d=$('#ai-dialog');if(_d&&!_d.open)_d.showModal();window.lucide?.createIcons();aiRenderConversation()});
 window.medadOpenAi=()=>$('#ai-open')?.click();
-function aiDressWelcome(){const m=document.querySelector('#ai-welcome .ai-welcome-mark');if(m&&window.MedadMascot&&!m.classList.contains('has-mascot')){m.innerHTML=window.MedadMascot.svg('idle');m.classList.add('has-mascot')}}
-aiDressWelcome();
 $('#ai-use-profile')?.addEventListener('click',async()=>applyProfileToEditable($('#ai-result'),await getDocumentProfile()));
 $('#ai-open-editor')?.addEventListener('click',()=>aiOpenDraftInEditor($('#ai-result')?.innerHTML||''));
 $('#ai-print')?.addEventListener('click',()=>{const w=window.open('','_blank');if(!w){showToast('Allow pop-ups to print','error');return}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Medad</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.8;padding:24px;color:#20231b}h1,h2{color:#485331}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd2bc;padding:8px}</style></head><body>'+$('#ai-result').innerHTML+'</body></html>');w.document.close();w.focus();w.print()});
@@ -3986,3 +4000,24 @@ function enhanceSelectChips(select) {
 }
 ['#ai-kind', '#ai-language', '#ai-api-style', '#aws-status', '#team-month'].forEach((sel) => enhanceSelectChips($(sel)));
 $('#ai-prompt')?.addEventListener('input', () => { const p = $('#ai-prompt'); p.style.height = 'auto'; p.style.height = Math.min(p.scrollHeight, 180) + 'px'; });
+$('#topbar-ai')?.addEventListener('click',()=>$('#ai-open')?.click());
+
+let aiEditSource = '';
+$('#ai-dialog')?.addEventListener('close', () => { aiEditSource = ''; $('#ai-edit-banner')?.remove(); });
+$('#btn-ai-edit')?.addEventListener('click', () => {
+  const el = $('#document-content');
+  if (!currentUser) { openAuthDialog('login'); return; }
+  if (!el || activeLicense?.document?.storage_path) { showToast(L3('التعديل بالذكاء متاح للوثائق النصية. لملفات PDF أرفقها داخل المحادثة.', 'Édition IA pour les documents texte. Pour un PDF, joignez-le dans la discussion.', 'AI editing works on text documents. For PDFs, attach them in the chat.'), 'info'); $('#ai-open')?.click(); return; }
+  const clone = el.cloneNode(true); clone.querySelectorAll('script,style,[data-watermark]').forEach(n => n.remove());
+  aiEditSource = clone.innerHTML;
+  $('#ai-open')?.click();
+  activeAiMessages = []; try { aiRenderConversation(); } catch (_) {}
+  $('#ai-edit-banner')?.remove();
+  const b = document.createElement('div'); b.id = 'ai-edit-banner'; b.className = 'ai-detected';
+  b.textContent = L3('وضع التعديل: اكتب ما تريد تغييره في الوثيقة (مثال: اكتب اسمي هنا: ...).', 'Mode édition : décrivez la modification (ex. : écris mon nom ici).', 'Edit mode: describe the change (e.g. write my name here).');
+  $('#ai-prompt')?.parentElement?.prepend(b); $('#ai-prompt')?.focus();
+});
+
+$('#ai-history-toggle')?.addEventListener('click',e=>{e.stopPropagation();document.querySelector('.ai-chat-layout')?.classList.toggle('show-history')});
+document.querySelector('.ai-chat-layout')?.addEventListener('click',e=>{const l=e.currentTarget;if(!l.classList.contains('show-history'))return;if(!e.target.closest('.ai-chat-sidebar')||e.target.closest('.ai-history-item,#ai-new-chat'))l.classList.remove('show-history')});
+$('#ai-dialog')?.addEventListener('close',()=>document.querySelector('.ai-chat-layout')?.classList.remove('show-history'));

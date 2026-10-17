@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ورق مخطط — مِداد</title>
+<style>
+:root{--bg:#f4f1e8;--card:#fff;--ink:#2f3320;--acc:#535a34;--line:#d9dfc6;--y:#ffd43b}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1e16;--card:#2a2d21;--ink:#eef1e0;--line:#44492f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Tajawal,system-ui,sans-serif;min-height:100vh}
+#sheet{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:12px}
+#paper{background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.25);flex:none}
+#paper svg{display:block;width:100%;height:100%}
+.panel{position:fixed;top:12px;left:50%;transform:translateX(-50%);width:min(94vw,380px);background:var(--card);border-radius:14px;box-shadow:0 6px 28px rgba(0,0,0,.28);padding:12px 14px;z-index:5;max-height:calc(100dvh - 24px);overflow:auto}
+.head{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:14px;margin-bottom:8px}
+.head a{color:var(--acc);font-size:12px;text-decoration:none}
+.types{display:flex;justify-content:space-between;margin-bottom:8px}
+.types button{flex:1;border:0;background:none;padding:8px 2px;font-size:11px;color:var(--ink);opacity:.55;cursor:pointer;border-bottom:3px solid transparent;font-family:inherit;font-weight:700}
+.types button svg{display:block;margin:0 auto 3px;width:22px;height:22px}
+.types button.on{opacity:1;border-color:var(--y)}
+.box{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12px;font-weight:700}
+.row span{width:54px;flex:none}.row input[type=range]{flex:1;accent-color:var(--acc)}
+.row output{width:52px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:2px 0;font-size:12px}
+.row input[type=color]{flex:1;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:0}
+.row select{flex:1;padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit}
+#print{display:block;margin:10px auto 0;background:var(--y);color:#222;border:0;border-radius:8px;padding:10px 34px;font:800 15px Tajawal,system-ui,sans-serif;cursor:pointer}
+@media print{.panel{display:none}body{background:#fff}#sheet{position:static;padding:0;display:block;overflow:visible}#paper{box-shadow:none;width:var(--pw)!important;height:var(--ph)!important}@page{margin:0;size:var(--pw) var(--ph)}}
+</style></head><body>
+<div id="sheet"><div id="paper"></div></div>
+<div class="panel">
+ <div class="head"><span>اصنع ورقك المخطط</span><a href="index.html">← مِداد</a></div>
+ <div class="types" id="types"></div>
+ <div class="box">
+  <label class="row"><span>الحجم</span><input id="size" type="range" min="2" max="30" step="0.5" value="5"><output id="sizeo">5 مم</output></label>
+  <label class="row"><span>السماكة</span><input id="thick" type="range" min="0.1" max="1" step="0.05" value="0.25"><output id="thicko">0.25</output></label>
+  <label class="row"><span>اللون</span><input id="color" type="color" value="#777777"></label>
+  <label class="row"><span>الورقة</span><select id="pap"><option value="210,297">A4</option><option value="297,420">A3</option><option value="148,210">A5</option><option value="216,279">Letter</option></select><select id="ori"><option value="p">طولي</option><option value="l">عرضي</option></select></label>
+ </div>
+ <button id="print" type="button">طباعة</button>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const ICON={dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="6" r="1.8"/><circle cx="18" cy="6" r="1.8"/><circle cx="6" cy="18" r="1.8"/><circle cx="18" cy="18" r="1.8"/></svg>',
+iso:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="6" cy="17" r="1.8"/><circle cx="18" cy="17" r="1.8"/></svg>',
+lines:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8h18M3 16h18"/></svg>',
+squares:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="4" width="16" height="16"/></svg>',
+tri:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 4l9 16H3z"/></svg>',
+hex:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>'};
+const NAMES={dots:'نقاط',iso:'نقاط مثلثة',lines:'سطور',squares:'مربعات',tri:'مثلثات',hex:'سداسي'};
+let type='squares';
+const types=$('#types');
+for(const k in ICON){const b=document.createElement('button');b.type='button';b.dataset.k=k;b.innerHTML=ICON[k]+NAMES[k];b.onclick=()=>{type=k;draw()};types.append(b)}
+function pattern(t,s,c,w){ // s in mm; returns {w,h,body}
+ const st=`stroke="${c}" stroke-width="${w}" fill="none" stroke-linecap="round"`;
+ if(t==='dots')return{w:s,h:s,body:`<circle cx="${s/2}" cy="${s/2}" r="${Math.max(.15,w*1.6)}" fill="${c}"/>`};
+ if(t==='iso'){const h=s*Math.sqrt(3)/2;const r=Math.max(.15,w*1.6);return{w:s,h:2*h,body:`<circle cx="0" cy="0" r="${r}" fill="${c}"/><circle cx="${s}" cy="0" r="${r}" fill="${c}"/><circle cx="${s/2}" cy="${h}" r="${r}" fill="${c}"/><circle cx="0" cy="${2*h}" r="${r}" fill="${c}"/><circle cx="${s}" cy="${2*h}" r="${r}" fill="${c}"/>`}}
+ if(t==='lines')return{w:s,h:s,body:`<path d="M0 ${s} H${s}" ${st}/>`};
+ if(t==='squares')return{w:s,h:s,body:`<path d="M0 0H${s}M0 0V${s}" ${st}/>`};
+ if(t==='tri'){const h=s*Math.sqrt(3)/2;return{w:s,h:h,body:`<path d="M0 0H${s}M0 ${h}H${s}M0 ${h}L${s/2} 0L${s} ${h}M${s/2} ${h}L${s} 0M0 0L${s/2} ${h}" ${st}/>`}}
+ const a=s/2,W=a*Math.sqrt(3);
+ return{w:W,h:3*a,body:`<path d="M${W/2} 0L${W} ${a/2}V${a*1.5}L${W/2} ${2*a}L0 ${a*1.5}V${a/2}ZM${W/2} ${2*a}V${3*a}" ${st}/>`};
+}
+function draw(){
+ const s=+$('#size').value,w=+$('#thick').value,c=$('#color').value;
+ $('#sizeo').textContent=s+' مم';$('#thicko').textContent=w;
+ let [pw,ph]=$('#pap').value.split(',').map(Number);if($('#ori').value==='l')[pw,ph]=[ph,pw];
+ const p=pattern(type,s,c,w);
+ const paper=$('#paper');
+ const scale=Math.min((innerWidth-24)/pw,1.6),px=Math.max(1,scale);
+ paper.style.width=pw*3.7795+'px';paper.style.height=ph*3.7795+'px';
+ paper.style.setProperty('--pw',pw+'mm');paper.style.setProperty('--ph',ph+'mm');
+ const fit=Math.min(1,(innerWidth-24)/(pw*3.7795));paper.style.zoom=fit;
+ paper.innerHTML=`<svg viewBox="0 0 ${pw} ${ph}" preserveAspectRatio="none"><defs><pattern id="g" width="${p.w}" height="${p.h}" patternUnits="userSpaceOnUse">${p.body}</pattern></defs><rect width="${pw}" height="${ph}" fill="#fff"/><rect width="${pw}" height="${ph}" fill="url(#g)"/></svg>`;
+ types.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.k===type));
+}
+['size','thick','color','pap','ori'].forEach(i=>$('#'+i).addEventListener('input',draw));
+addEventListener('resize',draw);$('#print').onclick=()=>print();draw();
+</script></body></html>

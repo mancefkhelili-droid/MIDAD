@@ -1048,66 +1048,18 @@ html[data-theme="dark"] .seg-chip.active,html[data-theme="dark"] .wallet-method-
 
 .ai-detected.is-bad{color:var(--danger-fg);direction:inherit}
 
-/* ===== ضياء — mascot: sun by day, sleepy moon by night ===== */
-.mascot{--m-ink:#4a3210;--m-sun:#ffc83d;--m-sun2:#f5a623;--m-moon:#e4e9ff;--m-moon2:#c5cdf3;--m-cap:#4b4fa8;--m-gold:#ffd666;display:block;width:100%;height:100%;overflow:visible}
-html[data-theme="dark"] .mascot{--m-ink:#232a55}
-.mascot .m-shadow{fill:#000;opacity:.16;transform-box:fill-box;transform-origin:center;animation:mBobShadow 3.2s ease-in-out infinite}
-.mascot .m-body-g{transform-box:fill-box;transform-origin:50% 60%;animation:mBob 3.2s ease-in-out infinite}
-.mascot .m-moon,.mascot .m-stars{display:none}
-html[data-theme="dark"] .mascot .m-sun{display:none}html[data-theme="dark"] .mascot .m-moon,html[data-theme="dark"] .mascot .m-stars{display:block}
-.mascot .m-rays polygon{fill:var(--m-sun2);stroke:var(--m-sun2);stroke-width:5;stroke-linejoin:round}
-.mascot .m-rays{transform-box:fill-box;transform-origin:center;animation:mSpin 26s linear infinite}
-.mascot .m-sun-disc{fill:var(--m-sun);stroke:var(--m-sun2);stroke-width:3}
-.mascot .m-moon-disc{fill:var(--m-moon);stroke:var(--m-moon2);stroke-width:3}.mascot .m-crater{fill:var(--m-moon2);opacity:.75}
-.mascot .m-shine{fill:none;stroke:#fff;stroke-opacity:.55;stroke-width:4.5;stroke-linecap:round}
-.mascot .m-cap{fill:var(--m-cap)}.mascot .m-cap-band{fill:none;stroke:#fff;stroke-width:7;stroke-linecap:round}.mascot .m-pom{fill:#fff}.mascot .m-cap-star{fill:var(--m-gold)}
-.mascot .m-stars path{fill:var(--m-gold);transform-box:fill-box;transform-origin:center;animation:mTwinkle 2.4s ease-in-out infinite}
-.mascot .m-stars path:nth-child(2){animation-delay:.6s}.mascot .m-stars path:nth-child(3){animation-delay:1.2s}.mascot .m-stars path:nth-child(4){animation-delay:1.8s}
-.mascot .m-cheek{fill:#f08f7a;opacity:.45}
-.mascot .m-eye{fill:#fffdf6;stroke:var(--m-ink);stroke-width:1.6}.mascot .m-pupil{fill:var(--m-ink);transition:cx .12s,cy .12s}.mascot .m-glint{fill:#fff}
-.mascot .m-lid{fill:var(--m-sun);transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0);transition:transform .07s}
-html[data-theme="dark"] .mascot .m-lid{fill:var(--m-moon)}
-html[data-theme="dark"] .mascot[data-state="idle"] .m-lid{transform:scaleY(.34)}
-.mascot.is-blink .m-lid,html[data-theme="dark"] .mascot.is-blink[data-state="idle"] .m-lid{transform:scaleY(1)}
-.mascot .m-happy-eyes{display:none;fill:none;stroke:var(--m-ink);stroke-width:4.2;stroke-linecap:round}
-.mascot .m-mouth{fill:none;stroke:var(--m-ink);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;display:none}
-.mascot .m-mouth-idle{display:block}
-.mascot .m-mouth-happy,.mascot .m-mouth-think{fill:var(--m-ink)}
-.mascot .m-tear{fill:#8fd0ff;opacity:.9;display:none}
-.mascot .m-dots{display:none;fill:var(--m-sun2)}html[data-theme="dark"] .mascot .m-dots{fill:var(--m-gold)}
-.mascot[data-state="happy"] .m-eyes{display:none}.mascot[data-state="happy"] .m-happy-eyes{display:block}
-.mascot[data-state="happy"] .m-mouth-idle{display:none}.mascot[data-state="happy"] .m-mouth-happy{display:block}
-.mascot[data-state="happy"] .m-body-g{animation:mHop .5s ease-out 2}.mascot[data-state="happy"] .m-rays{animation-duration:5s}
-.mascot[data-state="sad"] .m-mouth-idle{display:none}.mascot[data-state="sad"] .m-mouth-sad{display:block}.mascot[data-state="sad"] .m-tear{display:block;animation:mTear 1.6s ease-in infinite}
-.mascot[data-state="sad"] .m-rays{animation-duration:90s}
-.mascot[data-state="thinking"] .m-mouth-idle{display:none}.mascot[data-state="thinking"] .m-mouth-think{display:block}.mascot[data-state="thinking"] .m-rays{animation-duration:4s}
-.mascot[data-state="thinking"] .m-dots{display:block}.mascot[data-state="thinking"] .m-dots circle{animation:mDot 1.1s ease-in-out infinite}
-.mascot[data-state="thinking"] .m-dots circle:nth-child(2){animation-delay:.18s}.mascot[data-state="thinking"] .m-dots circle:nth-child(3){animation-delay:.36s}
-.mascot.is-swap .m-celestial{animation:mSwap .7s cubic-bezier(.2,.8,.3,1.2)}
-@keyframes mSwap{0%{transform:rotate(-120deg) scale(.2);opacity:0}100%{transform:none;opacity:1}}
-@keyframes mSpin{to{transform:rotate(360deg)}}@keyframes mTwinkle{50%{transform:scale(.45);opacity:.35}}
-@keyframes mBob{50%{transform:translateY(-3px)}}@keyframes mBobShadow{50%{transform:scaleX(.88);opacity:.1}}
-@keyframes mHop{40%{transform:translateY(-14px) scale(.97,1.05)}}@keyframes mTear{0%{transform:translateY(-3px);opacity:0}30%{opacity:.9}100%{transform:translateY(10px);opacity:0}}
-@keyframes mDot{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+/* mobile text size */
+@media(max-width:760px){html{font-size:14px}body{font-size:14px}h1{font-size:1.7rem!important}h2{font-size:1.3rem!important}h3{font-size:1.05rem!important}.ai-message-content,.ai-message-body{font-size:13px}.ai-chat-heading p{font-size:12px}.topbar-ai span{display:none}}
+.topbar-ai{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface,transparent);color:var(--accent);border-radius:999px;padding:7px 12px;font:inherit;font-weight:800;cursor:pointer}
+.topbar-ai i,.topbar-ai svg{width:16px;height:16px}
 
-.mascot-fab{position:fixed;inset-inline-end:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:70;display:flex;flex-direction:column;align-items:flex-end}
-.mascot-fab.is-away{display:none}
-.mascot-btn{width:76px;height:88px;padding:0;border:0;background:none;cursor:pointer;filter:drop-shadow(0 8px 14px rgba(28,31,21,.28));transition:transform .18s;-webkit-tap-highlight-color:transparent}
-.mascot-btn:hover{transform:scale(1.07)}.mascot-btn:active{transform:scale(.95)}
-.mascot-btn:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:24px}
-.mascot-fab.is-wave .mascot-btn .m-body-g{animation:mWave .6s ease-in-out infinite}
-.mascot-fab.is-hop .mascot-btn{animation:mHop .55s ease-out}
-@keyframes mWave{25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
-.mascot-bubble{position:relative;max-width:min(240px,calc(100vw - 100px));margin-bottom:10px;padding:10px 32px 10px 14px;border-radius:16px;background:var(--paper);color:var(--ink);border:1px solid var(--line);box-shadow:0 12px 30px rgba(28,31,21,.18);font:700 13px/1.65 'Tajawal',sans-serif;opacity:0;transform:translateY(8px) scale(.96);pointer-events:none;transition:opacity .25s,transform .25s}
-html[dir="rtl"] .mascot-bubble{padding:10px 14px 10px 32px}
-.mascot-bubble.is-on{opacity:1;transform:none;pointer-events:auto}
-.mascot-bubble::after{content:"";position:absolute;bottom:-6px;inset-inline-end:30px;width:11px;height:11px;background:var(--paper);border-inline-end:1px solid var(--line);border-bottom:1px solid var(--line);transform:rotate(45deg)}
-.mascot-bubble-text{cursor:pointer}
-.mascot-bubble-x{position:absolute;top:5px;inset-inline-end:6px;width:22px;height:22px;border:0;border-radius:50%;background:var(--soft-bg);color:var(--soft-fg);cursor:pointer;font-size:15px;line-height:1;display:grid;place-items:center}
-html[dir="rtl"] .mascot-bubble-x{inset-inline-end:auto;inset-inline-start:6px}
-.mascot-mini{display:block;width:100%;height:100%}.mascot-mini .mascot .m-body-g,.mascot-mini .mascot .m-shadow,.mascot-mini .mascot .m-rays{animation:none}
-.ai-message-avatar:has(.mascot-mini){background:none!important;border:0!important;box-shadow:none!important;padding:0;overflow:visible}
-.ai-welcome-mark.has-mascot{width:88px;height:100px;background:none!important;border:0!important;box-shadow:none!important;border-radius:0}
-.ai-welcome-mark.has-mascot .mascot .m-body-g{animation:mBob 3.2s ease-in-out infinite}
-@media(max-width:760px){.mascot-btn{width:60px;height:70px}.mascot-fab{inset-inline-end:10px}}
-@media(prefers-reduced-motion:reduce){.mascot *{animation:none!important;transition:none!important}.mascot-fab *{animation:none!important}}
+.ai-history-toggle{display:none}
+@media(max-width:760px){
+ .ai-history-toggle{display:inline-flex;position:absolute;left:58px;top:14px;width:40px;height:40px;align-items:center;justify-content:center;z-index:5}
+ .ai-chat-layout.show-history .ai-chat-sidebar{display:flex;position:fixed;inset:0 0 0 auto;width:min(86vw,320px);z-index:30;box-shadow:-10px 0 30px rgba(0,0,0,.25);overflow-y:auto}
+ .ai-chat-layout.show-history::after{content:"";position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29}
+ .ai-chat-layout.show-history .ai-chat-sidebar{z-index:31}
+ .ai-chat-topbar{min-height:0!important;padding-bottom:10px!important}
+ .ai-chat-topbar p,.ai-status,.ai-chat-topbar .section-kicker,.ai-private-note{display:none}
+ .ai-welcome p{font-size:12px}.ai-suggestions button{padding:10px 12px;font-size:13px}
+}
