@@ -5,10 +5,10 @@
 :root{--bg:#e9e6dc;--card:#fff;--ink:#2f3320;--acc:#535a34;--line:#d9dfc6;--y:#ffd43b}
 
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Tajawal,system-ui,sans-serif;min-height:100vh}
-#sheet{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:12px}
+#sheet{display:flex;justify-content:center;padding:12px 12px 40px}
 #paper{background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.25);flex:none}
 #paper svg{display:block;width:100%;height:100%}
-.panel{position:fixed;top:12px;left:50%;transform:translateX(-50%);width:min(94vw,380px);background:var(--card);border-radius:14px;box-shadow:0 6px 28px rgba(0,0,0,.28);padding:12px 14px;z-index:5;max-height:calc(100dvh - 24px);overflow:auto}
+.panel{position:relative;margin:8px auto 0;width:min(94vw,380px);background:var(--card);border-radius:14px;box-shadow:0 6px 28px rgba(0,0,0,.28);padding:12px 14px;z-index:5}
 .head{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:14px;margin-bottom:8px}
 .head a{color:var(--acc);font-size:12px;text-decoration:none}
 .types{display:flex;justify-content:space-between;margin-bottom:8px}
@@ -19,23 +19,23 @@
 .row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12px;font-weight:700}
 .row span{width:54px;flex:none}.row input[type=range]{flex:1;accent-color:var(--acc)}
 .row output{width:52px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:2px 0;font-size:12px}
-.row input[type=color]{flex:1;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:0}
+.row input[type=color]{flex:1;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px;-webkit-appearance:none;appearance:none}.row input[type=color]::-webkit-color-swatch-wrapper{padding:0}.row input[type=color]::-webkit-color-swatch{border:0;border-radius:4px}
 .row select{flex:1;padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit}
 #print{display:block;margin:10px auto 0;background:var(--y);color:#222;border:0;border-radius:8px;padding:10px 34px;font:800 15px Tajawal,system-ui,sans-serif;cursor:pointer}
-@media print{.panel{display:none}body{background:#fff}#sheet{position:static;padding:0;display:block;overflow:visible}#paper{box-shadow:none;width:var(--pw)!important;height:var(--ph)!important}@page{margin:0;size:var(--pw) var(--ph)}}
+@media print{.panel{display:none}#paper{width:var(--pw)!important;height:var(--ph)!important}body{background:#fff}#sheet{position:static;padding:0;display:block;overflow:visible}#paper{box-shadow:none;width:var(--pw)!important;height:var(--ph)!important}@page{margin:0;size:var(--pw) var(--ph)}}
 </style></head><body>
-<div id="sheet"><div id="paper"></div></div>
 <div class="panel">
  <div class="head"><span>اصنع ورقك المخطط</span><a href="index.html">← مِداد</a></div>
  <div class="types" id="types"></div>
  <div class="box">
   <label class="row"><span>الحجم</span><input id="size" type="range" min="2" max="30" step="0.5" value="5"><output id="sizeo">5 مم</output></label>
-  <label class="row"><span>السماكة</span><input id="thick" type="range" min="0.1" max="1" step="0.05" value="0.25"><output id="thicko">0.25</output></label>
+  <label class="row"><span>السماكة</span><input id="thick" type="range" min="0.1" max="1" step="0.05" value="0.4"><output id="thicko">0.4</output></label>
   <label class="row"><span>اللون</span><input id="color" type="color" value="#777777"></label>
   <label class="row"><span>الورقة</span><select id="pap"><option value="210,297">A4</option><option value="297,420">A3</option><option value="148,210">A5</option><option value="216,279">Letter</option></select><select id="ori"><option value="p">طولي</option><option value="l">عرضي</option></select></label>
  </div>
  <button id="print" type="button">طباعة</button>
 </div>
+<div id="sheet"><div id="paper"></div></div>
 <script>
 const $=s=>document.querySelector(s);
 const ICON={dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="6" r="1.8"/><circle cx="18" cy="6" r="1.8"/><circle cx="6" cy="18" r="1.8"/><circle cx="18" cy="18" r="1.8"/></svg>',
@@ -65,9 +65,8 @@ function draw(){
  const p=pattern(type,s,c,w);
  const paper=$('#paper');
  const scale=Math.min((innerWidth-24)/pw,1.6),px=Math.max(1,scale);
- paper.style.width=pw*3.7795+'px';paper.style.height=ph*3.7795+'px';
+ const fit=Math.min(1,(innerWidth-24)/(pw*3.7795));paper.style.width=pw*3.7795*fit+'px';paper.style.height=ph*3.7795*fit+'px';
  paper.style.setProperty('--pw',pw+'mm');paper.style.setProperty('--ph',ph+'mm');
- const fit=Math.min(1,(innerWidth-24)/(pw*3.7795));paper.style.zoom=fit;
  paper.innerHTML=`<svg viewBox="0 0 ${pw} ${ph}" preserveAspectRatio="none"><defs><pattern id="g" width="${p.w}" height="${p.h}" patternUnits="userSpaceOnUse">${p.body}</pattern></defs><rect width="${pw}" height="${ph}" fill="#fff"/><rect width="${pw}" height="${ph}" fill="url(#g)"/></svg>`;
  types.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.k===type));
 }
